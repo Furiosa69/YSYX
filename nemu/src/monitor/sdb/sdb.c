@@ -23,6 +23,9 @@ static int is_batch_mode = false;
 
 void init_regex();
 void init_wp_pool();
+void wp_watch(char *expr,word_t res);
+void wp_remove(int no);
+void wp_iterate();
 
 /* We use the `readline' library to provide more flexibility to read from stdin. */
 static char* rl_gets() {
@@ -53,6 +56,75 @@ static int cmd_q(char *args) {
   return -1;
 }
 
+static int cmd_p(char *args){
+  bool success;
+  int32_t res = expr(args,&success);
+  if(!success) {
+		printf("invalid expression\n");
+  } else {
+		printf("%d\n",res);
+  }
+  return 0;
+}
+
+static int cmd_w(char *args){
+  if(!args) {
+		printf("Usage: w EXPR\n");
+		return 0;
+  }
+  bool success;
+  word_t res = expr(args,&success);
+  if(!success) {
+		printf("invalid expression\n");
+  } else {
+		wp_watch(args,res);
+  }
+  return 0;
+}
+
+static int cmd_si(char *args){
+  char *arg = strtok(NULL," ");
+  int n;
+
+  if(arg == NULL) {
+		n = 1;
+  } else {
+		n = strtol(arg,NULL,10);
+  }
+ 
+  cpu_exec(n);
+  return 0;
+}
+
+static int cmd_d(char *args){
+  char *arg = strtok(NULL," ");
+  if(!arg) {
+		printf("Usage: d N\n");
+		return 0;
+  }
+  int no = strtol(arg,NULL,10);
+  wp_remove(no);
+  return 0;
+}
+
+static int cmd_info(char *args){
+  char *arg = strtok(NULL," ");
+
+  if(arg == NULL) {
+		printf("Usage: info r(registers) or info w(watchpoints)\n");
+  } else {
+	if(strcmp(arg,"r")==0) {
+		isa_reg_display();
+	} else if(strcmp(arg,"w")==0) {
+		wp_iterate();
+	} else {
+		printf("Usage: info r(registers) or info w(watchpoints)\n");
+	}
+  }
+ 
+  return 0;
+}
+
 static int cmd_help(char *args);
 
 static struct {
@@ -63,8 +135,11 @@ static struct {
   { "help", "Display information about all supported commands", cmd_help },
   { "c", "Continue the execution of the program", cmd_c },
   { "q", "Exit NEMU", cmd_q },
-
-  /* TODO: Add more commands */
+  { "p", "Usage: p EXPR, Calcalate the expression",cmd_p},
+  { "w", "Usage:w EXPR, Watch for the variation of the result of EXPR,pause at variation point",cmd_w},
+  { "d", "Usage:d N. Delete watchpoint ",cmd_d},
+  { "info", "Display the info of registers & watchpoints",cmd_info },
+  { "si", "Continue the execution in N steps,default 1",cmd_si },
 
 };
 
