@@ -18,6 +18,7 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 #include "sdb.h"
+#include "memory/vaddr.h"
 
 static int is_batch_mode = false;
 
@@ -72,6 +73,17 @@ static int cmd_p(char *args){
   return 0;
 }
 
+static int cmd_px(char *args){
+  bool success;
+  int32_t res = expr(args,&success);
+  if(!success) {
+		printf("invalid expression\n");
+  } else {
+		printf("%x\n",res);
+  }
+  return 0;
+}
+
 static int cmd_w(char *args){
   if(!args) {
 		printf("Usage: w EXPR\n");
@@ -112,6 +124,26 @@ static int cmd_d(char *args){
   return 0;
 }
 
+static int cmd_x(char *args) {
+
+  int len;
+  vaddr_t addr;
+  sscanf(args,"%d %x",&len,&addr);
+
+  int i,j;
+  for(i = 0;i<len;){
+	  printf(ANSI_FMT("%#010x: ",ANSI_FG_BLUE),addr);
+  
+	  for(j = 0;i<len&&j<5;j++,i++){
+			word_t data = vaddr_read(addr,4);//查看host_read函数定义后返回32位值
+			addr += 4;
+			printf("%#010x ",data);//查看isa文件里面的init.c对照发现输出正确
+  	}
+  	puts("");
+  }
+  return 0;
+}
+
 static int cmd_info(char *args){
   char *arg = strtok(NULL," ");
 
@@ -141,11 +173,13 @@ static struct {
   { "c", "Continue the execution of the program", cmd_c },
   { "q", "Exit NEMU", cmd_q },
   { "p", "Usage: p EXPR, Calcalate the expression",cmd_p},
+  { "p/x", "Usage: p/x EXPR, Represent data in hexadecimal",cmd_px},
   { "w", "Usage:w EXPR, Watch for the variation of the result of EXPR,pause at variation point",cmd_w},
   { "d", "Usage:d N. Delete watchpoint ",cmd_d},
   { "info", "Display the info of registers & watchpoints",cmd_info },
   { "si", "Continue the execution in N steps,default 1",cmd_si },
   { "r",  "Run program again",cmd_r },
+  { "x",  "Usage: x N EXPR, Scan the memory from EXPR by N bytes",cmd_x},
 };
 
 #define NR_CMD ARRLEN(cmd_table)

@@ -36,6 +36,12 @@ word_t isa_reg_str2val(const char *s, bool *success) {
   int reg_num = ARRLEN(regs);
   int i;
 
+  int l1 = strlen(s);
+  int l2 = strlen("PC");
+  if(strncmp(s+l1-2,"PC"+l2-2,2)==0){
+    return cpu.pc;
+  }
+
   for(i = 0;i<reg_num ;i++) {
     int len1 = strlen(s);
     int len2 = strlen(regs[i]);

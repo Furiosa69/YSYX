@@ -111,7 +111,7 @@ static int type3[] = {'(',')',TK_NUM,TK_REG};
 
 static bool specialtype(int type,int types[],int size) {
   for(int i = 0;i<size;i++){
-	if(type == types[i]) return true;
+	  if(type == types[i]) return true;
   }
   return false;
 }
@@ -218,7 +218,7 @@ static word_t return_num(int i,bool *success) {
 		  if(strncmp("0x",tokens[i].str,2) == 0) {
 		  	return strtol(tokens[i].str,NULL,16);
 		  } else {
-			return strtol(tokens[i].str,NULL,10);
+			  return strtol(tokens[i].str,NULL,10);
 		  }
 		case TK_REG :
 		  	return isa_reg_str2val(tokens[i].str,success);//根据讲义使用准备好的API,返回寄存器的值
@@ -234,21 +234,20 @@ static word_t eval(int p,int q,bool *success){
   *success = true;
 
   if(p>q){
-	//Bad expression
-	*success = false;
-	return 0;
+	  //Bad expression
+	  *success = false;
+	  return 0;
   } else if (p == q) {
-	//Single token.For now this token should be a number.Return the value of the number.
-	return return_num(p,success);
+	  //Single token.For now this token should be a number.Return the value of the number.
+	  return return_num(p,success);
   } else if (check_parentheses(p,q) == true) {
-	//The expression is surrounded by a matched pair of parentheses.If that is the case, just throw away the parentheses.
-	return eval(p+1,q-1,success);
+	  //The expression is surrounded by a matched pair of parentheses.If that is the case, just throw away the parentheses.
+	  return eval(p+1,q-1,success);
   } else {
-
-	int major = find_major(p,q);
-	if(major < 0) {
-		*success = false;
-		return 0;
+	  int major = find_major(p,q);
+	  if(major < 0) {
+	  	*success = false;
+	  	return 0;
 	}
 
 	//对分裂出来的两个子表达式进行递归求值
