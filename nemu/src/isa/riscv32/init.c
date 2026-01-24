@@ -34,6 +34,14 @@ static void restart() {
   cpu.gpr[0] = 0;
 }
 
+void restart_again(){
+  cpu.pc = RESET_VECTOR;
+  for(int i=0;i<32;i++){
+    cpu.gpr[i] = 0;
+  }
+  nemu_state.state = NEMU_RUNNING;
+}
+
 void init_isa() {
   /* Load built-in image. */
   memcpy(guest_to_host(RESET_VECTOR), img, sizeof(img));

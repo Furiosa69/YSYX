@@ -24,8 +24,24 @@ const char *regs[] = {
 };
 
 void isa_reg_display() {
+	int reg_num = ARRLEN(regs);
+	int i;
+
+	for(i = 0;i<reg_num ;i++) {
+		printf("reg[%2d]: %3s%#12x\n",i,regs[i],cpu.gpr[i]);
+	}
 }
 
 word_t isa_reg_str2val(const char *s, bool *success) {
+  int reg_num = ARRLEN(regs);
+  int i;
+
+  for(i = 0;i<reg_num ;i++) {
+    int len1 = strlen(s);
+    int len2 = strlen(regs[i]);
+	  if(strncmp( s+len1-2, regs[i]+len2-2,2)== 0){
+	  	return cpu.gpr[i];
+	  }
+  }
   return 0;
 }

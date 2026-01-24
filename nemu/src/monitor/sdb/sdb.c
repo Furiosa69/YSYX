@@ -26,6 +26,7 @@ void init_wp_pool();
 void wp_watch(char *expr,word_t res);
 void wp_remove(int no);
 void wp_iterate();
+void restart_again();
 
 /* We use the `readline' library to provide more flexibility to read from stdin. */
 static char* rl_gets() {
@@ -50,6 +51,10 @@ static int cmd_c(char *args) {
   return 0;
 }
 
+static int cmd_r(char *args) {
+  restart_again();
+  return 0;
+}
 
 static int cmd_q(char *args) {
   nemu_state.state = NEMU_QUIT;
@@ -140,7 +145,7 @@ static struct {
   { "d", "Usage:d N. Delete watchpoint ",cmd_d},
   { "info", "Display the info of registers & watchpoints",cmd_info },
   { "si", "Continue the execution in N steps,default 1",cmd_si },
-
+  { "r",  "Run program again",cmd_r },
 };
 
 #define NR_CMD ARRLEN(cmd_table)
