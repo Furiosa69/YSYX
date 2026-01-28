@@ -41,8 +41,8 @@ void init_wp_pool() {
 //申请新监视点
 static WP* new_wp() {
   if(free_ == NULL) {
-	printf("No free watchpoint!");
-	assert(free_);
+	  printf("No free watchpoint!");
+	  assert(free_);
   }
   WP* ret = free_;//向free请求结点
   free_ = free_->next;//free指向下一个结点
@@ -56,9 +56,9 @@ void free_wp(WP *wp) {
   WP* h = head;
   if(h == wp) head = NULL;
   else {
-			while(h && h->next != wp) h = h->next;
-			assert(h);
-			h->next = wp->next;
+		while(h && h->next != wp) h = h->next;
+		assert(h);
+		h->next = wp->next;
   }
   wp->next = free_;
   free_ = wp;
@@ -71,6 +71,7 @@ void wp_watch(char *args,word_t res) {
   wp->old = res;
   printf("Watchpoint %d: %s\n",wp->NO,wp->expr);
 }
+
 //删除监视点
 void wp_remove(int no) {
   assert (no < NR_WP);
@@ -78,16 +79,17 @@ void wp_remove(int no) {
   free_wp(wp);
   printf("Delete watchpoint %d: %s\n",wp->NO,wp->expr);
 }
+
 //打印监视点
 void wp_iterate() {
   WP* h = head;
   if(!h) {
-	printf("No watchpoints.\n");
-	return;
+	  printf("No watchpoints.\n");
+	  return;
   }
   while(h) {
-	printf("%8d %8s\n",h->NO,h->expr);
-	h = h->next;
+	  printf("%8d %8s\n",h->NO,h->expr);
+	  h = h->next;
   }
 }
 //不相等则触发信息
@@ -101,7 +103,7 @@ void wp_check() {
 	  nemu_state.state = NEMU_STOP;//触发监视点暂停
 	  h->old = new;
 	}
-	h = h->next;
+	  h = h->next;
   }
 }
 
