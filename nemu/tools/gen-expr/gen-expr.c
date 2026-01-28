@@ -23,6 +23,9 @@
 // this should be enough
 static char buf[65536] = {};
 static char code_buf[65536 + 128] = {}; // a little larger than `buf`
+static char *start = NULL;
+static char *end = buf + (sizeof(buf)/sizeof(buf[0]));
+
 static char *code_format =
 "#include <stdio.h>\n"
 "int main() { "
@@ -31,11 +34,57 @@ static char *code_format =
 "  return 0; "
 "}";
 
-static void gen_rand_expr() {
-  buf[0] = '\0';
+//随机生成0-n-1的一个数
+static int choose(int n) {
+  return rand() % n;
 }
 
+
+static void  gen_num() {
+  int num = choose(INT8_MAX);
+  if(start < end){
+	int n = snprintf(start,end-start,"%d",num);
+	if (n>0) {
+		start += n;
+	}
+  }
+}
+
+static void  gen_char(char c) {
+  int n = snprintf(start,end-start,"%c",c);
+  if(start < end && n>0){
+	start += n;
+  }
+}
+
+static char ops[] = {'+','-','*','/'};
+static void gen_rand_op() {
+  int index = choose(sizeof(ops));
+  char op = ops[index];
+  gen_char(op);
+}
+
+static void gen_rand_expr() {
+  switch(choose(3)) {
+	case 0: gen_num();break;
+	case 1: gen_char('(');gen_rand_expr();gen_char(')');break;
+	default:gen_rand_expr();gen_rand_op();gen_rand_expr();break;
+  }
+}
+
+//static int check_zero() {
+//  char *p = buf;
+//  while (*p) {
+//	if( *p == '/' && * ( p + 1) == 0) {
+//		return 1;
+//	} 
+//	p++;
+//  }
+//  return 0;
+//}
+
 int main(int argc, char *argv[]) {
+
   int seed = time(0);
   srand(seed);
   int loop = 1;
@@ -44,6 +93,8 @@ int main(int argc, char *argv[]) {
   }
   int i;
   for (i = 0; i < loop; i ++) {
+    start = buf;
+
     gen_rand_expr();
 
     sprintf(code_buf, code_format, buf);
@@ -53,7 +104,7 @@ int main(int argc, char *argv[]) {
     fputs(code_buf, fp);
     fclose(fp);
 
-    int ret = system("gcc /tmp/.code.c -o /tmp/.expr");
+    int ret = system("gcc -Wall -Werror /tmp/.code.c -o /tmp/.expr");
     if (ret != 0) continue;
 
     fp = popen("/tmp/.expr", "r");

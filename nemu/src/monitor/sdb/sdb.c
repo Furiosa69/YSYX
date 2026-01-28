@@ -17,6 +17,7 @@
 #include <cpu/cpu.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <stdlib.h>
 #include "sdb.h"
 #include "memory/vaddr.h"
 
@@ -28,6 +29,7 @@ void wp_watch(char *expr,word_t res);
 void wp_remove(int no);
 void wp_iterate();
 void restart_again();
+void test_expr(int no);
 
 /* We use the `readline' library to provide more flexibility to read from stdin. */
 static char* rl_gets() {
@@ -144,6 +146,20 @@ static int cmd_x(char *args) {
   return 0;
 }
 
+
+static int cmd_exprtest(char *args){
+  char *arg = strtok(NULL," ");
+  if(!arg){
+		printf("Usage: exprtest n\n");
+    return 0;
+  }
+  int no = strtol(arg,NULL,10); 
+
+  test_expr(no);
+
+  return 0;
+}
+
 static int cmd_info(char *args){
   char *arg = strtok(NULL," ");
 
@@ -180,6 +196,7 @@ static struct {
   { "si", "Continue the execution in N steps,default 1",cmd_si },
   { "r",  "Run program again",cmd_r },
   { "x",  "Usage: x N EXPR, Scan the memory from EXPR by N bytes",cmd_x},
+  { "exprtest", "Usage:exprtest N, creat N tests and difftest", cmd_exprtest},
 };
 
 #define NR_CMD ARRLEN(cmd_table)
@@ -255,4 +272,69 @@ void init_sdb() {
 
   /* Initialize the watchpoint pool. */
   init_wp_pool();
+}
+
+void test_expr(int no) {
+  int32_t EXPR;
+  int32_t TEST;
+  bool success;
+  FILE *fp = NULL;
+  char *buf = NULL;
+  size_t len = 0;
+  ssize_t read ;
+  char filepath[128];
+
+  const char *nemu_home = getenv("NEMU_HOME");
+
+  char command[256];
+  snprintf(command, sizeof(command),"%s/tools/gen-expr/build/gen-expr %d > input",nemu_home,no);
+  printf("Excute command: %s\n",command);
+  system(command);
+
+  snprintf(filepath,sizeof(filepath),"%s/input",nemu_home);
+
+  fp = fopen(filepath,"r");
+  if(fp == NULL) {
+    perror("file open fail!\n");
+    return;
+  }
+ 
+  int test_count = 0;
+  int passed = 0;
+  int failed = 0;
+
+  while(fscanf(fp,"%d ",&TEST)==1){
+	  read = getline(&buf,&len,fp);
+    if(read == -1){
+      fprintf(stderr,"Read exprtest failed\n");
+    }
+    if(read > 0 && buf[read-1] == '\n'){
+	    buf[read-1] = '\0';
+      read--;
+    }
+
+    EXPR = expr(buf,&success);
+
+    if(!success){
+      printf("Failed: can not exprtest:%s\n",buf);
+      failed ++;
+    }
+    else if( TEST != EXPR) {
+      printf("wrong: expr = %s \nTEST =  %d, EXPR =  %d\n",buf,TEST,EXPR);
+      failed ++;
+    } else {
+//      printf("right: expr = %s \nTEST =  %d, EXPR =  %d\n\n",buf,TEST,EXPR);
+      passed ++;
+    }
+
+    test_count ++;
+  }
+
+  printf("\n===== sum =====\n");
+  printf("总计: %d\n",test_count);
+  printf("通过: %d\n",passed);
+  printf("失败: %d\n",failed);
+
+  fclose(fp);
+  free(buf); 
 }
