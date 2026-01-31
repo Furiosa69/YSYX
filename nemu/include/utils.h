@@ -34,7 +34,42 @@ extern NEMUState nemu_state;
 
 uint64_t get_time();
 
+// ----------- iringbuf --------
+#define RING_BUFFER_SIZE 20 //定义环形缓冲区大小
+														
+typedef struct {
+		uint64_t pc;
+		uint32_t inst;
+		char inst_str[128];
+} RingBufferEntry;
+
+typedef struct {
+		int head;
+		int tail;
+		int count;
+		int current_index;
+		RingBufferEntry entries[RING_BUFFER_SIZE];
+} RingBuffer;
+
+extern RingBuffer ringbuf;
+
+void init_ring_buffer(RingBuffer *rf);
+void add_to_ringbuffer(RingBuffer*rb,uint64_t pc ,uint32_t inst);
+void print_ringbuffer(RingBuffer *rb);
+
+// ----------- mtrace -----------
+void init_mtrace();
+extern FILE *mtrace_log;
+#define LOG_TRACE_READ(addr ,len, data)  fprintf(mtrace_log, "TRACE:Read  %d bytes from 0x%x, data = 0x%x\n", len, addr, data)
+#define LOG_TRACE_WRITE(addr, len, data) fprintf(mtrace_log, "TRACE:Write %d bytes to 	 0x%x, data = 0x%x\n", len, addr, data)
+
+// ----------- ftrace --------
+extern char *ftrace_elf;
+void init_ftrace();
+void print_all_function_names(uint32_t current_pc,uint32_t target_pc,uint32_t inst);
+void end_ftrace();
 // ----------- log -----------
+extern const char *nemu_home;
 
 #define ANSI_FG_BLACK   "\33[1;30m"
 #define ANSI_FG_RED     "\33[1;31m"

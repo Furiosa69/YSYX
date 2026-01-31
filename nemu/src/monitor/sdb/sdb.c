@@ -294,10 +294,7 @@ void test_expr(int no) {
   snprintf(filepath,sizeof(filepath),"%s/input",nemu_home);
 
   fp = fopen(filepath,"r");
-  if(fp == NULL) {
-    perror("file open fail!\n");
-    return;
-  }
+  assert(fp);
  
   int test_count = 0;
   int passed = 0;

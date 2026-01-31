@@ -154,6 +154,20 @@ config ITRACE_COND
   string "Only trace instructions when the condition is true"
   default "true"
 
+config IRINGBUF_COND
+  depends on TRACE
+  bool "Enable iringbuf"
+  default y
+
+config MTRACE_COND
+  depends on TRACE
+  bool "Enable MTrace"
+  default n
+
+config FTRACE_COND
+  depends on TRACE
+  bool "Enable FTrace"
+  default n
 
 config DIFFTEST
   depends on TARGET_NATIVE_ELF
