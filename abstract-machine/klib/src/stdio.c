@@ -102,6 +102,13 @@ int vsprintf(char *out, const char *fmt, va_list ap) {
                     }
                     break;
                 }
+                case 'c': { // 处理 %c（字符）
+                    char ch = va_arg(ap, int);
+                    
+                    // 输出字符
+                    out[len++] = ch;
+                    break;
+                }
                 case 's': { // 处理 %s（字符串）
                     char *s = va_arg(ap, char*);
                     int str_len = 0;
