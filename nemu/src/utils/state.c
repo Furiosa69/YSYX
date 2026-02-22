@@ -26,6 +26,7 @@ int is_exit_status_bad() {
   #endif
   IFDEF(CONFIG_MTRACE_COND, fclose(mtrace_log));
   IFDEF(CONFIG_FTRACE_COND, end_ftrace());
+  IFDEF(CONFIG_DTRACE_COND, fclose(dtrace_file));
 
   return !good;
 }

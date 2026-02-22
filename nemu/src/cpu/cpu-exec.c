@@ -86,6 +86,7 @@ static void execute(uint64_t n) {
   IFDEF(CONFIG_IRINGBUF, init_ring_buffer(&ringbuf));
   IFDEF(CONFIG_MTRACE_COND,init_mtrace());
   IFDEF(CONFIG_FTRACE_COND,init_ftrace());
+  IFDEF(CONFIG_DTRACE_COND,init_dtrace());
 
   Decode s;
   for (;n > 0; n --) {

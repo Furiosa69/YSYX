@@ -164,6 +164,11 @@ config MTRACE_COND
   bool "Enable MTrace"
   default n
 
+config DTRACE_COND
+  depends on TRACE
+  bool "Enable DTrace"
+  default n
+
 config FTRACE_COND
   depends on TRACE
   bool "Enable FTrace"

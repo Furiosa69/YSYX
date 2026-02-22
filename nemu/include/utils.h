@@ -68,9 +68,12 @@ extern char *ftrace_elf;
 void init_ftrace();
 void print_all_function_names(uint32_t current_pc,uint32_t target_pc,uint32_t inst);
 void end_ftrace();
-// ----------- log -----------
-extern const char *nemu_home;
 
+// ----------- mtrace --------
+extern FILE *dtrace_file;
+void init_dtrace();
+
+// ----------- log -----------
 #define ANSI_FG_BLACK   "\33[1;30m"
 #define ANSI_FG_RED     "\33[1;31m"
 #define ANSI_FG_GREEN   "\33[1;32m"
