@@ -10,7 +10,7 @@ endif
 TOP_MODULE := top
 OBJ_DIR := $(NPC_HOME)/obj_dir
 
-VERILATOR_FLAGS += -cc --exe --build -MMD --trace
+VERILATOR_FLAGS += -cc --exe --build -MMD --trace --trace-fst
 VERILATOR_FLAGS += -x-assign fast
 VERILATOR_FLAGS += --top-module $(TOP_MODULE)\
                    -I$(NPC_HOME)/vsrc
@@ -33,11 +33,10 @@ BIN      := $(OBJ_DIR)/V$(TOP_MODULE)
 NPC_EXEC := ${BIN}
 
 # Trace
-IMG  ?=  $(NPC_HOME)/bin/microbench-riscv32e-npc.bin
+IMG  ?=  $(NPC_HOME)/bin/dummy-riscv32e-npc.bin
 #ARGS += -d $(NEMU_HOME)/build/riscv32-nemu-interpreter-so
 #ARGS += -f $(NPC_HOME)/bin/microbench-riscv32e-npc.elf
-ARGS += -b
-ARGC  ?= ${IMG}
+ARGC ?= ${IMG}
 TRACE_DIR := ./trace
 
 default: run
@@ -59,7 +58,7 @@ gdb:
 	gdb --args ${NPC_EXEC} ${ARGS} ${ARGC}
 
 wave:
-	gtkwave wave.vcd
+	gtkwave wave.fst
 
 obj_dir/Vtop: $(CXX_SRC) $(V_SRC)
 	@echo "-- VERILATE ---------------"
@@ -67,4 +66,4 @@ obj_dir/Vtop: $(CXX_SRC) $(V_SRC)
 	$(MAKE) -C obj_dir -f Vtop.mk LDLIBS="$(LDLIBS)"
 
 clean: 
-	rm -r  $(OBJ_DIR) $(TRACE_DIR) wave.vcd
+	rm -r  $(OBJ_DIR) $(TRACE_DIR) 
