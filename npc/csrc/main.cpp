@@ -3,6 +3,8 @@
 #include "main.h"
 
 int main(int argc, char *argv[]) {
+    Verilated::commandArgs(argc,argv);
+
 		printf("Command \n");
   	for (int i = 0; i < argc; i++)
   	{

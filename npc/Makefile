@@ -7,14 +7,19 @@ VERILATOR = $(VERILATOR_ROOT)/bin/verilator
 VERILATOR_COVERAGE = $(VERILATOR_ROOT)/bin/verilator_coverage
 endif
 
-TOP_MODULE := top
+TOP_MODULE := ysyx_24080018
 OBJ_DIR := $(NPC_HOME)/obj_dir
 
 VERILATOR_FLAGS += -cc --exe --build -MMD --trace --trace-fst
 VERILATOR_FLAGS += -x-assign fast
+#VERILATOR_FLAGS += --timescale "1ns/1ns" --no-timing
 VERILATOR_FLAGS += --top-module $(TOP_MODULE)\
                    -I$(NPC_HOME)/vsrc
 
+
+CXXFLAGS += -DTOP_NAME="\"V$(TOP_MODULE)\""\
+						-DTOP_ROOT="\"V$(TOP_MODULE)___024root\""\
+						-DTOP_DPI="\"V$(TOP_MODULE)__Dpi\""
 
 CXXFLAGS += -g $(shell llvm-config --cxxflags | sed 's/-D__STDC_[A-Z_]*//g') -fPIE \
             -I$(NPC_HOME)/csrc/include \
@@ -27,7 +32,7 @@ CFLAGS += -Wall -O0 -I$(NPC_HOME)/csrc
 LIBS += $(shell llvm-config --libs all) -lpthread -lrt -ldl -latomic -ledit -lSDL2
 
 CXX_SRC := $(shell find $(NPC_HOME)/csrc -name "*.cpp" -o -name "*.c")
-V_SRC   := $(shell find $(NPC_HOME)/vsrc -name "*.v") 
+V_SRC   += $(shell find $(NPC_HOME)/vsrc -name "*.v") 
 
 BIN      := $(OBJ_DIR)/V$(TOP_MODULE)
 NPC_EXEC := ${BIN}
@@ -66,4 +71,4 @@ obj_dir/Vtop: $(CXX_SRC) $(V_SRC)
 	$(MAKE) -C obj_dir -f Vtop.mk LDLIBS="$(LDLIBS)"
 
 clean: 
-	rm -r  $(OBJ_DIR) $(TRACE_DIR) 
+	rm -r  $(OBJ_DIR) 
