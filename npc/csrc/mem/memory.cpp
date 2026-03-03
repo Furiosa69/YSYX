@@ -2,7 +2,6 @@
 #include "utils/difftest.h"
 #include "common.h"
 #include "main.h"
-#include "Vysyx_24080018__Dpi.h"     
 #include <fcntl.h>
 #include <chrono>
 #include <SDL2/SDL.h>
@@ -24,34 +23,8 @@ IFONE(CONFIG_MTRACE,
 	}
 )
 
-#define DEVICE_BASE      0xa0000000   
-#define MMIO_BASE        0xa0000000
-#define SERIAL_PORT      (DEVICE_BASE + 0x00003f8)
-#define KBD_ADDR         (DEVICE_BASE + 0x0000060)
-#define RTC_ADDR_low     (DEVICE_BASE + 0x0000048)
-#define RTC_ADDR_high    (DEVICE_BASE + 0x000004c)
-#define VGACTL_ADDR      (DEVICE_BASE + 0x0000100)
-#define VGACTL_ADDR_high (DEVICE_BASE + 0x0000104)
-#define AUDIO_ADDR       (DEVICE_BASE + 0x0000200)
-#define DISK_ADDR        (DEVICE_BASE + 0x0000300)
-#define FB_ADDR          (MMIO_BASE   + 0x1000000)
-#define AUDIO_SBUF_ADDR  (MMIO_BASE   + 0x1200000)
-
-
 uint8_t* guest_to_host(uint32_t paddr) { return memory + paddr - CONFIG_MBASE; }
 uint32_t host_to_guest(uint8_t *haddr) { return haddr - memory + CONFIG_MBASE; }
-
-uint32_t vaddr_ifetch(uint32_t addr, int len) {
-  return pmem_read(addr, len);
-}
-
-uint32_t vaddr_read(uint32_t addr, int len) {
-  return pmem_read(addr, len);
-}
-
-void vaddr_write(uint32_t addr, int len, uint32_t data) {
-  pmem_write(addr, data,len );
-}                
 
 // ---------------- timer ------------------------------------
 static const auto startup_time = std::chrono::steady_clock::now();
@@ -170,33 +143,60 @@ uint32_t mmio_read(uint32_t addr_in, int size) {
     }
 }
 
-void mmio_write(uint32_t addr_in, uint32_t data, int size) {
-		uint32_t addr = addr_in & ~0x3u;
+void mmio_write(uint32_t addr_in, uint32_t data, uint wstrb) {
+    uint32_t addr = addr_in & ~0x3u;  // 对齐到4字节边界
+    
     switch (addr) {
         case SERIAL_PORT: {
-            if (size == 1) {
-								putc(data & 0xFF, stderr);
+            if (wstrb & 0b0001) {
+                uint8_t ch = data & 0xFF;
+                putc(ch, stderr);
+                IFONE(CONFIG_MTRACE, {
+                    LOG_TRACE_WRITE(addr_in, 1, ch);
+                });
             }
-            IFONE(CONFIG_MTRACE,LOG_TRACE_READ(addr, size, data);)
             break;
-				}
-				case VGACTL_ADDR_high:
-				case VGACTL_ADDR: {
-            // 设置VGA控制寄存器，触发屏幕同步
-            vga_ctl_reg = data;
-            screen_height = data & 0xFFFF;      
-            screen_width = (data >> 16) & 0xFFFF; 
-            
-            if (framebuffer == NULL && screen_width > 0 && screen_height > 0) {
-                framebuffer = new uint32_t[screen_width * screen_height];
-                for (int i = 0; i < screen_width * screen_height; i++) {
-                    framebuffer[i] = 0;
+        }
+        
+        case VGACTL_ADDR_high:
+        case VGACTL_ADDR: {
+            if (wstrb == 0b1111) {  // 所有字节都使能
+                vga_ctl_reg = data;
+                screen_height = data & 0xFFFF;      
+                screen_width = (data >> 16) & 0xFFFF; 
+                
+                if (framebuffer == NULL && screen_width > 0 && screen_height > 0) {
+                    framebuffer = new uint32_t[screen_width * screen_height];
+                    for (int i = 0; i < screen_width * screen_height; i++) {
+                        framebuffer[i] = 0;
+                    }
+                }
+                
+                IFONE(CONFIG_MTRACE, {
+                    LOG_TRACE_WRITE(addr_in, 4, data);
+                });
+            }
+            else {
+                for (int i = 0; i < 4; i++) {
+                    if (wstrb & (1 << i)) {
+                        uint8_t byte = (data >> (i * 8)) & 0xFF;
+                        uint32_t shift = i * 8;
+                        vga_ctl_reg = (vga_ctl_reg & ~(0xFF << shift)) | (byte << shift);
+                    }
+                }
+                screen_height = vga_ctl_reg & 0xFFFF;
+                screen_width = (vga_ctl_reg >> 16) & 0xFFFF;
+                
+                if (framebuffer == NULL && screen_width > 0 && screen_height > 0) {
+                    framebuffer = new uint32_t[screen_width * screen_height];
+                    for (int i = 0; i < screen_width * screen_height; i++) {
+                        framebuffer[i] = 0;
+                    }
                 }
             }
-            
-            IFONE(CONFIG_MTRACE, LOG_TRACE_WRITE(addr, size, data);)
             break;
-        } 
+        }
+        
         case FB_ADDR: {
             if (framebuffer == NULL) {
                 std::cerr << "Error: Framebuffer not initialized" << std::endl;
@@ -204,16 +204,34 @@ void mmio_write(uint32_t addr_in, uint32_t data, int size) {
             }
             
             uint32_t pixel_index = (addr_in - FB_ADDR) / 4;
+            uint32_t byte_offset = (addr_in - FB_ADDR) % 4;
+            
             if (pixel_index < screen_width * screen_height) {
-                framebuffer[pixel_index] = data;
-                IFONE(CONFIG_MTRACE, LOG_TRACE_WRITE(addr, size, data);)
+                for (int i = 0; i < 4; i++) {
+                    if (wstrb & (1 << i)) {
+                        uint8_t byte = (data >> (i * 8)) & 0xFF;
+                        uint32_t shift = (byte_offset + i) * 8;
+                        if (shift < 32) {  // 确保不超过32位
+                            framebuffer[pixel_index] = 
+                                (framebuffer[pixel_index] & ~(0xFF << shift)) | 
+                                (byte << shift);
+                        }
+                    }
+                }
+                
+                IFONE(CONFIG_MTRACE, {
+                    LOG_TRACE_WRITE(addr_in, wstrb, data);
+                });
             } else {
-                std::cerr << "Error: Framebuffer write out of bounds" << std::endl;
+                std::cerr << "Error: Framebuffer write out of bounds at index " 
+                          << pixel_index << std::endl;
             }
             break;
-        } 
+        }
+        
         default:
-            std::cerr << "Error: Unknown device address write 0x" << std::hex << addr << std::endl;
+            std::cerr << "Error: Unknown device address write 0x" << std::hex << addr 
+                      << " with wstrb=" << std::bitset<4>(wstrb) << std::endl;
     }
 }
 
@@ -258,47 +276,30 @@ uint32_t pmem_read(uint32_t addr, int size) {
     }
 }
 
-
-void pmem_write(uint32_t addr, uint32_t data, int size) {
-		if (addr >= DEVICE_BASE) {
-			 difftest_skip_ref();
-			 mmio_write(addr, data, size);		
-			 return;
-		}
-
-    if ((size == 2 && addr % 2 != 0) || (size == 4 && addr % 4 != 0)) {
-        std::cerr << "Error: Write Address is not " << size << "-byte aligned" << std::endl;
+void pmem_write(uint32_t addr, uint32_t data, uint32_t wstrb) {
+    if (addr >= DEVICE_BASE) {
+        difftest_skip_ref();
+        mmio_write(addr, data, wstrb);  
         return;
     }
-
+    
     size_t offset = (addr - 0x80000000);
     
-		if (offset + size > sizeof(memory)) {
+    if (offset + 4 > sizeof(memory)) {  // 最多写入4字节
         return;
     }
-
-    switch (size) {
-        case 1:{
-						uint8_t data1 = static_cast<uint8_t>(data);
-						IFONE(CONFIG_MTRACE,LOG_TRACE_WRITE(addr, size, data1);)
-            *reinterpret_cast<uint8_t*>(&memory[offset]) = data1;
-            break;
-				}
-        case 2:{
-						uint16_t data2 = static_cast<uint16_t>(data);
-						IFONE(CONFIG_MTRACE,LOG_TRACE_WRITE(addr, size, data2);)
-            *reinterpret_cast<uint16_t*>(&memory[offset]) = data2;
-            break;
-				}
-        case 4:{
-						uint32_t data4 = static_cast<uint32_t>(data);
-						IFONE(CONFIG_MTRACE,LOG_TRACE_WRITE(addr, size, data4);)
-            *reinterpret_cast<uint32_t*>(&memory[offset]) = data4;
-            break;
-				}
-        default:
-            std::cerr << "Error: Invalid size " << size << " (must be 1, 2, or 4)" << std::endl;
-            return;
+    for (int i = 0; i < 4; i++) {
+        if (wstrb & (1 << i)) {
+            uint32_t byte_addr = addr + i;
+            size_t byte_offset = offset + i;
+            uint8_t byte_data = (data >> (i * 8)) & 0xFF;
+            
+            memory[byte_offset] = byte_data;
+            
+            IFONE(CONFIG_MTRACE, {
+                LOG_TRACE_WRITE(byte_addr, 1, byte_data);
+            });
+        }
     }
 }
 
@@ -311,8 +312,6 @@ bool loadFileToMemory(const std::string& path, uint8_t* mem, size_t size) {
     file.read(reinterpret_cast<char*>(mem), size);
     return true;
 }
-
-
 
 void init_mem() {
   memset(memory, rand(), MEMORY_SIZE);

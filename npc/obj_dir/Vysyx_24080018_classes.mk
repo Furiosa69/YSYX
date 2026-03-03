@@ -27,7 +27,6 @@ VM_TRACE_VCD = 0
 VM_CLASSES_FAST += \
   Vysyx_24080018 \
   Vysyx_24080018___024root__0 \
-  Vysyx_24080018___024unit__0 \
 
 # Generated module classes, non-fast-path, compile with low/medium optimization
 VM_CLASSES_SLOW += \
@@ -39,7 +38,6 @@ VM_CLASSES_SLOW += \
 
 # Generated support classes, fast-path, compile with highest optimization
 VM_SUPPORT_FAST += \
-  Vysyx_24080018__Dpi \
   Vysyx_24080018__Trace__0 \
 
 # Generated support classes, non-fast-path, compile with low/medium optimization
@@ -51,7 +49,6 @@ VM_SUPPORT_SLOW += \
 # Global classes, need linked once per executable, fast-path, compile with highest optimization
 VM_GLOBAL_FAST += \
   verilated \
-  verilated_dpi \
   verilated_fst_c \
   verilated_threads \
 

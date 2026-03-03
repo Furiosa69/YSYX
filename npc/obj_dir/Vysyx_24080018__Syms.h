@@ -17,8 +17,6 @@
 #include "Vysyx_24080018___024root.h"
 #include "Vysyx_24080018___024unit.h"
 
-// DPI TYPES for DPI Export callbacks (Internal use)
-
 // SYMS CLASS (contains all model state)
 class alignas(VL_CACHE_LINE_BYTES) Vysyx_24080018__Syms final : public VerilatedSyms {
   public:
@@ -31,7 +29,6 @@ class alignas(VL_CACHE_LINE_BYTES) Vysyx_24080018__Syms final : public Verilated
 
     // MODULE INSTANCE STATE
     Vysyx_24080018___024root       TOP;
-    Vysyx_24080018___024unit       TOP____024unit;
 
     // CONSTRUCTORS
     Vysyx_24080018__Syms(VerilatedContext* contextp, const char* namep, Vysyx_24080018* modelp);

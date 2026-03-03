@@ -9,16 +9,20 @@ module ysyx_24080018(
   input           io_master_awready,
   output          io_master_awvalid,
   output [31:0]   io_master_awaddr ,
+
   input           io_master_wready ,
   output          io_master_wvalid ,
   output [31:0]   io_master_wdata  ,
   output [ 3:0]   io_master_wstrb  ,
+
   output          io_master_bready ,
   input           io_master_bvalid ,
   input  [ 1:0]   io_master_bresp  ,
+
   input           io_master_arready,
   output          io_master_arvalid,
   output [31:0]   io_master_araddr ,
+
   output          io_master_rready ,
   input           io_master_rvalid ,
   input  [ 1:0]   io_master_rresp  ,
@@ -311,7 +315,7 @@ module ysyx_24080018_IFU(
 	input 						i_ControlHazard,
   input      [31:0] i_imm,
   input             i_br_taken,
-	input	[PC_WIDTH-1:0] i_pc_idu,
+	input	     [PC_WIDTH-1:0] i_pc_idu,
   input      [31:0] i_ret,
   input      [ 3:0] i_pc_cnt,
 
@@ -352,14 +356,14 @@ module ysyx_24080018_IFU(
 
 	reg prev_idle;
 	
-	assign o_ifu_arvalid  = (!reset && (cstate == IDLE) && 
-	                        (!prev_idle  && !i_ControlHazard) &&       // 刚进入IDLE且无冒险
-                          (i_ifu_arready)
-	                        ) ? 1'b1 : 1'b0;
+	assign o_ifu_arvalid  = !reset && (cstate == IDLE) ;
+//	                        (!prev_idle  && !i_ControlHazard) &&       // 刚进入IDLE且无冒险
+//                          (i_ifu_arready)
+//	                        ) ? 1'b1 : 1'b0;
 
   always @(posedge clk) begin
     if(reset) begin
-      o_pc <= 32'h30000000;
+      o_pc <= 32'h80000000;
 	    prev_idle <= 1'b0;
 			temp_pc <= 0;
     end else begin
@@ -615,7 +619,7 @@ module ysyx_24080018_IDU (
   always @(posedge clk) begin
     if(reset) begin
       o_ControlHazard <= 1'b0;
-			o_pc			<= 32'h30000000;
+			o_pc			<= 32'h80000000;
       o_pc_cnt  <= 4'b0;
       o_lsu_cnt <= 4'b0;
       o_wbu_cnt <= 1'b0;
@@ -791,7 +795,7 @@ module ysyx_24080018_EXU(
 
   always @(posedge clk) begin
     if(reset) begin
-			o_pc							<= 32'h30000000;
+			o_pc							<= 32'h80000000;
 			o_waddr 				  <= 5'b0;
     end else begin
       case (cstate)
@@ -1339,19 +1343,15 @@ module ysyx_24080018_arbiter(
         next_state = state;
         case (state)
             IDLE: begin
-                if (ifu_req || lsu_req) begin
-                    if (current_master == 1'b0) begin  // IFU获得总线
-                        if (o_ifu_arvalid) begin
-                            next_state = IFU_RD;
-                        end
-                    end else begin  // LSU获得总线
-                        if (o_lsu_awvalid) begin
-                            next_state = LSU_WR;
-                        end else if (o_lsu_arvalid) begin
-                            next_state = LSU_RD;
-                        end
-                    end
-                end
+                  if (o_ifu_arvalid) begin
+                      next_state = IFU_RD;
+                  end else if (o_lsu_awvalid) begin
+                      next_state = LSU_WR;
+                  end else if (o_lsu_arvalid) begin
+                      next_state = LSU_RD;
+                  end else begin 
+                      next_state = IDLE;
+                  end
             end
             
             IFU_RD: begin

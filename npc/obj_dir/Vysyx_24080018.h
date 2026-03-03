@@ -9,13 +9,10 @@
 #define VERILATED_VYSYX_24080018_H_  // guard
 
 #include "verilated.h"
-#include "svdpi.h"
 
 class Vysyx_24080018__Syms;
 class Vysyx_24080018___024root;
 class VerilatedFstC;
-class Vysyx_24080018___024unit;
-
 
 // This class is the main interface to the Verilated model
 class alignas(VL_CACHE_LINE_BYTES) Vysyx_24080018 VL_NOT_FINAL : public VerilatedModel {
@@ -55,7 +52,6 @@ class alignas(VL_CACHE_LINE_BYTES) Vysyx_24080018 VL_NOT_FINAL : public Verilate
     // CELLS
     // Public to allow access to /* verilator public */ items.
     // Otherwise the application code can consider these internals.
-    Vysyx_24080018___024unit* const __PVT____024unit;
 
     // Root instance pointer to allow access to model internals,
     // including inlined /* verilator public_flat_* */ items.

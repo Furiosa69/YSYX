@@ -4,7 +4,6 @@
 #include <verilated.h>
 #include <verilated_fst_c.h>
 #include <Vysyx_24080018.h>
-#include "Vysyx_24080018__Dpi.h"
 #include "Vysyx_24080018___024root.h"
 
 #include "mem/memory.h"  
@@ -23,6 +22,25 @@ extern TOP_ROOT* root;
 //#define  MTVEC   root->top__DOT__csr_t0__DOT__mtvec
 //#define  MEPC		 root->top__DOT__csr_t0__DOT__mepc
 //#define  MSTATUS root->top__DOT__csr_t0__DOT__mstatus
+#define   CLOCK   top->clock
+#define   RESET   top->reset
+#define   AWREADY top->io_master_awready
+#define   AWVALID top->io_master_awvalid
+#define   AWADDR  top->io_master_awaddr
+#define   WREADY  top->io_master_wready
+#define   WVALID  top->io_master_wvalid
+#define   WDATA   top->io_master_wdata
+#define   WSTRB   top->io_master_wstrb
+#define   BREADY  top->io_master_bready
+#define   BVALID  top->io_master_bvalid
+#define   BRESP   top->io_master_bresp
+#define   ARREADY top->io_master_arready
+#define   ARVALID top->io_master_arvalid
+#define   ARADDR  top->io_master_araddr
+#define   RREADY  top->io_master_rready
+#define   RVALID  top->io_master_rvalid
+#define   RRESP   top->io_master_rresp
+#define   RDATA   top->io_master_rdata
 
 enum { NPC_RUNNING, NPC_STOP, NPC_END, NPC_ABORT, NPC_QUIT };
 

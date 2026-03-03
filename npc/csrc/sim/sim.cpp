@@ -85,18 +85,18 @@ void NPCTRAP(uint32_t pc ,int halt_ret){
 }
 
 void clock_tick() {
-    top->clock = !top->clock;
+    CLOCK = !CLOCK;
     step_and_dump_wave();
 }
 
 void rst_begin(){
-    top->clock   = 0;
-    top->reset   = 1;
+    CLOCK = 0;
+    RESET = 1;
 		clock_tick();
 		clock_tick();
 		clock_tick();
 		clock_tick();
-    top->reset   = 0;
+    RESET = 0;
 		clock_tick();
 		clock_tick();
 
@@ -137,6 +137,30 @@ int isa_exec_once(Decode *s){
 }
 
 static void exec_once(Decode *s, uint32_t pc) {
+  if(AWVALID && WVALID && BREADY){
+    pmem_write(AWADDR,WDATA,WSTRB);
+    WREADY  = 1;
+    AWREADY = 1;  
+    BVALID  = 1;
+    BRESP   = 0;
+  }else{
+    AWREADY = 0;
+    WREADY  = 0;
+    BVALID  = 0;
+    BRESP   = 1;
+  }
+
+  if(ARVALID && RREADY){
+    RDATA = pmem_read(ARADDR,4);
+    RRESP   = 0;
+    RVALID  = 1;
+    ARREADY = 0;
+  }else{
+    RDATA   = 0;
+    RRESP   = 1;
+    RVALID  = 0;
+    ARREADY = 1;
+  }
   s->pc = pc;
   s->snpc = pc;
   isa_exec_once(s);

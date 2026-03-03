@@ -6,15 +6,12 @@
 #define VERILATED_VYSYX_24080018___024ROOT_H_  // guard
 
 #include "verilated.h"
-class Vysyx_24080018___024unit;
 
 
 class Vysyx_24080018__Syms;
 
 class alignas(VL_CACHE_LINE_BYTES) Vysyx_24080018___024root final : public VerilatedModule {
   public:
-    // CELLS
-    Vysyx_24080018___024unit* __PVT____024unit;
 
     // DESIGN SPECIFIC STATE
     // Anonymous structures to workaround compiler member-count bugs

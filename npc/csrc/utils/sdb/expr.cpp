@@ -252,7 +252,7 @@ static uint32_t return_num(int i,bool *success) {
 static uint32_t Count1(int op,uint32_t val,bool *success) {
 	switch(op) {
 		case TK_NEG : return -val;
-		case TK_DEREF:return vaddr_read(val,4);
+		case TK_DEREF:return pmem_read(val,4);
 		case TK_POS : return val;
 		default : *success = false;
 	}

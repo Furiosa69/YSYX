@@ -29,7 +29,6 @@ Vysyx_24080018::Vysyx_24080018(VerilatedContext* _vcontextp__, const char* _vcna
     , io_master_wdata{vlSymsp->TOP.io_master_wdata}
     , io_master_araddr{vlSymsp->TOP.io_master_araddr}
     , io_master_rdata{vlSymsp->TOP.io_master_rdata}
-    , __PVT____024unit{vlSymsp->TOP.__PVT____024unit}
     , rootp{&(vlSymsp->TOP)}
 {
     // Register model with the context
