@@ -2,7 +2,7 @@
 #include "utils/difftest.h"
 #include "common.h"
 #include "main.h"
-#include "TOP_DPI.h"     
+#include "Vysyx_24080018__Dpi.h"     
 #include <fcntl.h>
 #include <chrono>
 #include <SDL2/SDL.h>

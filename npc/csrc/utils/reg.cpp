@@ -44,13 +44,13 @@ uint32_t diff_isa_reg_display(CPU_state *ref,CPU_state *dut) {
   int reg_num = ARRLEN(regs);
   int i;
 
-	if(ref->pc != root->top__DOT__ifu_pc){
+	if(ref->pc != PC){
 		printf("ref.pc -> 0x%08x , dut.pc -> 0x%08x\n",ref->pc,dut->pc);
 	}
 
   for(i = 0;i<reg_num;i++) {
-		if(ref->gpr[i] != root->top__DOT__gpr_t0__DOT__rf[i]){
-    	printf("%2d | ref->%s = 0x%08x, dut->%s = 0x%08x\n",i,regs[i],ref->gpr[i],regs[i],root->top__DOT__gpr_t0__DOT__rf[i]);
+		if(ref->gpr[i] != GPR[i]){
+    	printf("%2d | ref->%s = 0x%08x, dut->%s = 0x%08x\n",i,regs[i],ref->gpr[i],regs[i],GPR[i]);
 		}
 	}
 

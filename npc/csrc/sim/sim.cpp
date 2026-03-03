@@ -21,7 +21,7 @@ IFONE(CONFIG_RINGBUFF,
 )
 CPU_state  cpu = {};
 
-NPCState nemu_state = { .state = NPC_STOP };  
+NPCState npc_state = { .state = NPC_STOP };  
 
 void wp_check();
 
@@ -69,19 +69,19 @@ void sim_init(){
 //	#endif
 }
 
-void set_nemu_state(int state, uint32_t pc, int halt_ret) {
+void set_npc_state(int state, uint32_t pc, int halt_ret) {
 
 	IFONE(CONFIG_DIFFTEST,
 		difftest_skip_ref();
 	)
 
-  nemu_state.state = state;
-  nemu_state.halt_pc = pc;
-  nemu_state.halt_ret = halt_ret;
+  npc_state.state = state;
+  npc_state.halt_pc = pc;
+  npc_state.halt_ret = halt_ret;
 }
 
 void NPCTRAP(uint32_t pc ,int halt_ret){
-	set_nemu_state(NPC_END,pc,halt_ret);
+	set_npc_state(NPC_END,pc,halt_ret);
 }
 
 void clock_tick() {
@@ -100,15 +100,15 @@ void rst_begin(){
 		clock_tick();
 		clock_tick();
 
-  	cpu.pc = root->top__DOT__ifu_pc;
+  	cpu.pc = PC;
 
 		for(int i = 0; i<32 ; ++i){
 			cpu.gpr[i] = GPR[i];
 		}
-		cpu.csr[0] = MCAUSE;
-		cpu.csr[1] = MTVEC ;
-		cpu.csr[2] = MEPC  ;
-		cpu.csr[3] = MSTATUS;
+//		cpu.csr[0] = MCAUSE;
+//		cpu.csr[1] = MTVEC ;
+//		cpu.csr[2] = MEPC  ;
+//		cpu.csr[3] = MSTATUS;
 
 		// Init begin
 		IFONE(CONFIG_RINGBUFF,
@@ -145,10 +145,10 @@ static void exec_once(Decode *s, uint32_t pc) {
 	for(int i = 0; i<32 ; ++i){
 		cpu.gpr[i] = GPR[i];
 	}
-		cpu.csr[0] = MCAUSE;
-		cpu.csr[1] = MTVEC ;
-		cpu.csr[2] = MEPC  ;
-		cpu.csr[3] = MSTATUS;
+//		cpu.csr[0] = MCAUSE;
+//		cpu.csr[1] = MTVEC ;
+//		cpu.csr[2] = MEPC  ;
+//		cpu.csr[3] = MSTATUS;
 
 	IFONE(CONFIG_FTRACE,
 		print_all_function_names(PC,DNPC,INST);
@@ -204,7 +204,7 @@ static void execute(uint64_t n) {
 			SDL_Delay(16);
 		)
 
-    if (nemu_state.state != NPC_RUNNING) {
+    if (npc_state.state != NPC_RUNNING) {
 			IFONE(CONFIG_LIGHTSSS,
       	g_execution_snapshot.wakeup_child(g_last_safe_point);
 				printf("Wakeup Child in PC 0x%x\n",PC);
@@ -218,34 +218,34 @@ static void execute(uint64_t n) {
 }
 
 void cpu_exec(uint64_t n){
-	switch (nemu_state.state) {
+	switch (npc_state.state) {
     case NPC_END: case NPC_ABORT:    
       printf("Program execution has ended. To restart the program, exit NPC and run again.\n");
       return;
-    default: nemu_state.state = NPC_RUNNING;
+    default: npc_state.state = NPC_RUNNING;
   }
 
 	execute(n);
 
-	switch (nemu_state.state) {
+	switch (npc_state.state) {
 	    case NPC_RUNNING:
-	        nemu_state.state = NPC_STOP;
+	        npc_state.state = NPC_STOP;
 	        break;
 	
 	    case NPC_ABORT:
 					IFONE(CONFIG_RINGBUFF,
 						print_ringbuf(&ringbuf);
 					)
-					printf(ANSI_FG_RED "NPC: At pc %x ABORT\n" ANSI_NONE,nemu_state.halt_pc);
+					printf(ANSI_FG_RED "NPC: At pc %x ABORT\n" ANSI_NONE,npc_state.halt_pc);
 					break;
 	    case NPC_END:
-	        if (nemu_state.halt_ret != 0) {
+	        if (npc_state.halt_ret != 0) {
 						IFONE(CONFIG_RINGBUFF,
 							print_ringbuf(&ringbuf);
 						)
-						printf(ANSI_FG_RED "NPC: At pc %x HIT BAD TRAP\n" ANSI_NONE ,nemu_state.halt_pc);
+						printf(ANSI_FG_RED "NPC: At pc %x HIT BAD TRAP\n" ANSI_NONE ,npc_state.halt_pc);
 	        } else {
-						printf(ANSI_FG_GREEN "NPC: At pc %x HIT GOOD TRAP\n" ANSI_NONE,nemu_state.halt_pc);
+						printf(ANSI_FG_GREEN "NPC: At pc %x HIT GOOD TRAP\n" ANSI_NONE,npc_state.halt_pc);
 	        }
 					break;
 	    case NPC_QUIT: 
@@ -254,7 +254,7 @@ void cpu_exec(uint64_t n){
 }
 
 int is_exit_status_bad() {   
-  int good = (nemu_state.state == NPC_END && nemu_state.halt_ret == 0) || (nemu_state.state == NPC_QUIT);
+  int good = (npc_state.state == NPC_END && npc_state.halt_ret == 0) || (npc_state.state == NPC_QUIT);
 
 	IFONE(CONFIG_FTRACE,end_ftrace();)
 

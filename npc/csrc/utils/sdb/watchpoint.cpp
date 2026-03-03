@@ -91,7 +91,7 @@ void wp_check() {
 	uint32_t new_one = expr(h->expr,&success);
 	if(h->old != new_one) {
 	  printf("Watchpoint %d: %s \tOld value = %x \tNew value = %x\n",h->NO,h->expr,h->old,new_one);
-	  nemu_state.state = NEMU_STOP;//触发监视点暂停
+	  npc_state.state = NPC_STOP;//触发监视点暂停
 	  h->old = new_one;
 	}
 	h = h->next;

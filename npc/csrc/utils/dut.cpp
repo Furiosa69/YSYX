@@ -27,12 +27,12 @@ void difftest_disable(void){
 bool isa_difftest_checkregs(CPU_state *ref_r, uint32_t pc) {
 
   for (int i = 0; i < 32; ++i) {
-    if (ref_r->gpr[i] != root->top__DOT__gpr_t0__DOT__rf[i]){
+    if (ref_r->gpr[i] != GPR[i]){
       return false;
     }
   }
 
-  if (ref_r->pc != root->top__DOT__ifu_pc) {
+  if (ref_r->pc != PC) {
     return false;
   }
 
@@ -76,8 +76,8 @@ void init_difftest(char *ref_so_file, long img_size, int port) {
 
 static void checkregs(CPU_state *ref, uint32_t pc) {
   if (!isa_difftest_checkregs(ref, pc)) {
-    nemu_state.state = NPC_ABORT;
-    nemu_state.halt_pc = pc;
+    npc_state.state = NPC_ABORT;
+    npc_state.halt_pc = pc;
     diff_isa_reg_display(ref,&cpu);
   }
 }

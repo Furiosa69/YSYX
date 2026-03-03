@@ -46,7 +46,7 @@ TRACE_DIR := ./trace
 
 default: run
 
-run: obj_dir/Vtop
+run: obj_dir/V$(TOP_MODULE)
 	@echo "-- RUNNING  ---------------"
 	@mkdir -p $(TRACE_DIR)
 	${NPC_EXEC} ${ARGS} ${ARGC}
@@ -65,10 +65,10 @@ gdb:
 wave:
 	gtkwave wave.fst
 
-obj_dir/Vtop: $(CXX_SRC) $(V_SRC)
+obj_dir/V$(TOP_MODULE): $(CXX_SRC) $(V_SRC)
 	@echo "-- VERILATE ---------------"
 	$(VERILATOR) $(VERILATOR_FLAGS) $(CXX_SRC) $(V_SRC) --CFLAGS "$(CXXFLAGS)" --LDFLAGS "$(LIBS)"
-	$(MAKE) -C obj_dir -f Vtop.mk LDLIBS="$(LDLIBS)"
+	$(MAKE) -C obj_dir -f V$(TOP_MODULE).mk LDLIBS="$(LDLIBS)"
 
 clean: 
 	rm -r  $(OBJ_DIR) 

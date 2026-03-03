@@ -47,6 +47,31 @@ wire 	      br_taken;
 wire 	      auipc,lui,load,jalr,jal;
 wire 	      ControlHazard;
 
+wire [31:0] o_ifu_araddr;
+wire        o_ifu_arvalid;
+wire        i_ifu_arready;
+wire [31:0] i_ifu_rdata;
+wire [ 1:0] i_ifu_rresp; 
+wire        i_ifu_rvalid; 
+wire        o_ifu_rready;
+wire [31:0] o_lsu_awaddr ;
+wire        o_lsu_awvalid;
+wire        i_lsu_awready;
+wire [31:0] o_lsu_araddr ;
+wire        o_lsu_arvalid;
+wire        i_lsu_arready;
+wire [31:0] i_lsu_rdata  ;
+wire [ 1:0] i_lsu_rresp  ;
+wire        i_lsu_rvalid ;
+wire        o_lsu_rready ;
+wire [31:0] o_lsu_wdata  ;
+wire [ 3:0] o_lsu_wstrb  ;
+wire        o_lsu_wvalid ;
+wire        i_lsu_wready ;
+wire [ 1:0] i_lsu_bresp  ;
+wire        i_lsu_bvalid ;
+wire        o_lsu_bready ;
+
 wire ifu_idu_valid,idu_exu_valid,exu_mem_valid,mem_wbu_valid,exu_csr_valid;
 wire idu_ifu_ready,exu_idu_ready,mem_exu_ready,wbu_mem_ready,csr_exu_ready;
 wire wbu_ifu_retire,csr_ifu_retire;
@@ -76,7 +101,7 @@ ysyx_24080018_IFU ifu(
   .i_ifu_rdata    (i_ifu_rdata  ),
   .i_ifu_rresp    (i_ifu_rresp  ),
   .i_ifu_rvalid   (i_ifu_rvalid ),
-  .o_ifu_rready   (o_ifu_rready ),
+  .o_ifu_rready   (o_ifu_rready )
 );
 
 ysyx_24080018_IDU idu(
@@ -895,7 +920,7 @@ module ysyx_24080018_LSU (
   wire [31:0] temp;
 	wire [31:0] lsu_rdata;
   wire [ 1:0] o_lsu_size;
-  wire        o_lsu_wen,
+  wire        o_lsu_wen;
 
 	wire load,store;
 
@@ -1220,9 +1245,6 @@ module ysyx_24080018_arbiter(
   input            clock,
   input            reset,
 
-  input     [31:0] o_ifu_awaddr  ,
-  input            o_ifu_awvalid ,
-  output           i_ifu_awready ,
   input     [31:0] o_ifu_araddr  ,
   input            o_ifu_arvalid ,
   output           i_ifu_arready ,
@@ -1230,13 +1252,6 @@ module ysyx_24080018_arbiter(
   output    [ 1:0] i_ifu_rresp   ,
   output           i_ifu_rvalid  ,
   input            o_ifu_rready  ,
-  input     [31:0] o_ifu_wdata   ,
-  input     [ 3:0] o_ifu_wstrb   ,
-  input            o_ifu_wvalid  ,
-  output           i_ifu_wready  ,
-  output    [ 1:0] i_ifu_bresp   ,
-  output           i_ifu_bvalid  ,
-  input            o_ifu_bready  ,
 
   input     [31:0] o_lsu_awaddr  ,
   input            o_lsu_awvalid ,
@@ -1309,7 +1324,7 @@ module ysyx_24080018_arbiter(
     end
     
     always @(posedge clock) begin
-        if (!rst_n) begin
+        if (!reset) begin
             state <= IDLE;
             last_master <= 1'b0;
         end else begin
@@ -1391,23 +1406,35 @@ module ysyx_24080018_arbiter(
     assign i_lsu_wready  = (state == LSU_WR) ? io_master_wready : 1'b0;
     assign i_lsu_arready = (state == LSU_RD) ? io_master_arready : 1'b0;
     
-    always @(posedge io_master_arready) begin
-        if (state == RESP && !current_is_write && io_master_rvalid && io_master_rready) begin
-            captured_rdata <= io_master_rdata;
-            captured_rresp <= io_master_rresp;
-            response_ready <= 1'b1;
-        end else if ((current_master == 1'b0 && o_ifu_rready) ||
-                     (current_master == 1'b1 && o_lsu_rready)) begin
+    always @(posedge clock) begin
+        if (!reset) begin
+            captured_rdata <= 32'b0;
+            captured_rresp <= 2'b00;
+            captured_bresp <= 2'b00;
             response_ready <= 1'b0;
-        end
-    end
-    
-    always @(posedge io_master_awready) begin
-        if (state == RESP && current_is_write && io_master_bvalid && io_master_bready) begin
-            captured_bresp <= io_master_bresp;
-            response_ready <= 1'b1;
-        end else if (current_master == 1'b1 && o_lsu_bready) begin
-            response_ready <= 1'b0;
+        end else begin
+            captured_rdata <= captured_rdata;
+            captured_rresp <= captured_rresp;
+            captured_bresp <= captured_bresp;
+            
+            if (state == RESP && !current_is_write && 
+                io_master_rvalid && io_master_rready) begin
+                captured_rdata <= io_master_rdata;
+                captured_rresp <= io_master_rresp;
+                response_ready <= 1'b1;
+            end
+            else if (state == RESP && current_is_write && 
+                     io_master_bvalid && io_master_bready) begin
+                captured_bresp <= io_master_bresp;
+                response_ready <= 1'b1;
+            end
+            else if (response_ready) begin
+                if ((!current_is_write && ((current_master == 1'b0 && o_ifu_rready) || (current_master == 1'b1 && o_lsu_rready))) 
+                  || (current_is_write)) 
+                begin
+                    response_ready <= 1'b0;
+                end
+            end
         end
     end
     
