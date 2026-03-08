@@ -19,7 +19,7 @@ Vysyx_24080018__Syms::Vysyx_24080018__Syms(VerilatedContext* contextp, const cha
     , TOP{this, namep}
 {
     // Check resources
-    Verilated::stackCheck(356);
+    Verilated::stackCheck(442);
     // Configure time unit / time precision
     _vm_contextp__->timeunit(-12);
     _vm_contextp__->timeprecision(-12);

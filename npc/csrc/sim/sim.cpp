@@ -136,31 +136,99 @@ int isa_exec_once(Decode *s){
 	return decode_exec(s);
 }
 
+typedef enum {
+    IDLE,
+    ADDR_PHASE,
+    DATA_PHASE,
+    RESP_PHASE
+} SimState;
+
+static SimState sim_state = IDLE;
+static bool is_write = false;
+static uint32_t pending_waddr = 0;
+static uint32_t pending_raddr = 0;
+static uint32_t pending_wdata = 0;
+static uint8_t pending_wstrb = 0;
+static int delay_counter = 0;
+
 static void exec_once(Decode *s, uint32_t pc) {
-  if(AWVALID && WVALID && BREADY){
-    pmem_write(AWADDR,WDATA,WSTRB);
-    WREADY  = 1;
-    AWREADY = 1;  
-    BVALID  = 1;
-    BRESP   = 0;
-  }else{
     AWREADY = 0;
     WREADY  = 0;
     BVALID  = 0;
-    BRESP   = 1;
-  }
-
-  if(ARVALID && RREADY){
-    RDATA = pmem_read(ARADDR,4);
-    RRESP   = 0;
-    RVALID  = 1;
+    BRESP   = 0;
     ARREADY = 0;
-  }else{
-    RDATA   = 0;
-    RRESP   = 1;
     RVALID  = 0;
-    ARREADY = 1;
-  }
+    RDATA   = 0;
+    RRESP   = 0;
+    
+    switch (sim_state) {
+        case IDLE:
+            if (AWVALID) {
+                is_write = true;
+                pending_waddr = AWADDR;
+                sim_state = ADDR_PHASE;
+                AWREADY = 1;  // 接受地址
+                printf("Write request: addr=0x%08x\n", AWADDR);
+            }
+            else if (ARVALID) {
+                is_write = false;
+                pending_raddr = ARADDR;
+                sim_state = ADDR_PHASE;
+                ARREADY = 1;  // 接受地址
+                printf("Read request: addr=0x%08x\n", ARADDR);
+            }
+            break;
+            
+        case ADDR_PHASE:
+            if (is_write) {
+                // 写事务：等待数据
+                if (AWVALID) {
+                    pending_wdata = WDATA;
+                    pending_wstrb = WSTRB;
+                    WREADY = 1;  // 接受数据
+                    sim_state = DATA_PHASE;
+                    printf("Write data: 0x%08x, strb=0x%02x\n", WDATA, WSTRB);
+                }
+            } else {
+                // 读事务：直接进入响应阶段（模拟延迟）
+                delay_counter = 1;  // 2个周期延迟
+                sim_state = RESP_PHASE;
+            }
+            break;
+            
+        case DATA_PHASE:
+            // 写事务的数据阶段完成后，进入响应阶段
+            delay_counter = 1;
+            sim_state = RESP_PHASE;
+            break;
+            
+        case RESP_PHASE:
+            if (delay_counter > 0) {
+                delay_counter--;
+            } else {
+                if (is_write) {
+                    if (BREADY) {
+                        pmem_write(pending_waddr,pending_wdata,pending_wstrb);
+                        
+                        BVALID = 1;
+                        BRESP  = 0;  // OKAY
+                        sim_state = IDLE;
+                        printf("Write complete: addr=0x%08x\n", pending_waddr);
+                    }
+                } else {
+                    if (RREADY) {
+                        uint32_t data = pmem_read(pending_raddr, 4);
+                        RVALID = 1;
+                        RDATA  = data;
+                        RRESP  = 0;  // OKAY
+                        sim_state = IDLE;
+                        printf("Read complete: addr=0x%08x, data=0x%08x\n", pending_raddr, data);
+                    }
+                }
+            }
+            break;
+    }
+
   s->pc = pc;
   s->snpc = pc;
   isa_exec_once(s);

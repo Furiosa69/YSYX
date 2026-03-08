@@ -1,36 +1,137 @@
 [*]
 [*] GTKWave Analyzer v3.3.126 (w)1999-2026 BSI
-[*] Tue Mar  3 07:15:17 2026
+[*] Sun Mar  8 09:15:20 2026
 [*]
 [dumpfile] "/home/furiosa/Projects/MyCode/ysyx-workbench/npc/wave.fst"
-[dumpfile_mtime] "Tue Mar  3 07:11:54 2026"
-[dumpfile_size] 4121
+[dumpfile_mtime] "Sun Mar  8 08:59:47 2026"
+[dumpfile_size] 4501
 [savefile] "/home/furiosa/Projects/MyCode/ysyx-workbench/npc/debug.gtkw"
-[timestart] 1
+[timestart] 7
 [size] 1920 1121
-[pos] -27 -24
-*-2.575377 6 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[pos] -1 -1
+*-2.212806 17 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] TOP.
 [treeopen] TOP.ysyx_24080018.
+[treeopen] TOP.ysyx_24080018.gpr.
 [sst_width] 290
 [signals_width] 275
 [sst_expanded] 1
-[sst_vpaned_height] 662
-@22
-TOP.ysyx_24080018.io_master_araddr[31:0]
+[sst_vpaned_height] 307
 @28
-TOP.ysyx_24080018.io_master_arready
-TOP.ysyx_24080018.io_master_arvalid
-@200
--
+TOP.ysyx_24080018.arbiter.clock
+TOP.ysyx_24080018.reset
+@c00200
+-rf
 @22
-TOP.ysyx_24080018.io_master_rdata[31:0]
+TOP.ysyx_24080018.gpr.rf[0][31:0]
+TOP.ysyx_24080018.gpr.rf[1][31:0]
+TOP.ysyx_24080018.gpr.rf[2][31:0]
+TOP.ysyx_24080018.gpr.rf[3][31:0]
+TOP.ysyx_24080018.gpr.rf[4][31:0]
+TOP.ysyx_24080018.gpr.rf[5][31:0]
+TOP.ysyx_24080018.gpr.rf[6][31:0]
+TOP.ysyx_24080018.gpr.rf[7][31:0]
+TOP.ysyx_24080018.gpr.rf[8][31:0]
+TOP.ysyx_24080018.gpr.rf[9][31:0]
+TOP.ysyx_24080018.gpr.rf[10][31:0]
+TOP.ysyx_24080018.gpr.rf[11][31:0]
+TOP.ysyx_24080018.gpr.rf[12][31:0]
+TOP.ysyx_24080018.gpr.rf[13][31:0]
+TOP.ysyx_24080018.gpr.rf[14][31:0]
+TOP.ysyx_24080018.gpr.rf[15][31:0]
+@1401200
+-rf
+@c00200
+-gpr
+@22
+TOP.ysyx_24080018.gpr.i_wdata[31:0]
+TOP.ysyx_24080018.gpr.i_waddr[4:0]
 @28
-TOP.ysyx_24080018.io_master_rready
-TOP.ysyx_24080018.io_master_rresp[1:0]
+TOP.ysyx_24080018.gpr.wen
+TOP.ysyx_24080018.gpr.mem_wbu_valid
+TOP.ysyx_24080018.gpr.wbu_mem_ready
+@1401200
+-gpr
+@c00200
+-lsu
+@28
+TOP.ysyx_24080018.lsu.cstate
+TOP.ysyx_24080018.lsu.nstate
 @22
-TOP.ysyx_24080018.ifu.o_pc[31:0]
-TOP.ysyx_24080018.ifu.temp_pc[31:0]
+TOP.ysyx_24080018.lsu.i_lsu_wdata[31:0]
+TOP.ysyx_24080018.lsu.i_lsu_cnt[3:0]
+TOP.ysyx_24080018.lsu.i_waddr[4:0]
+@28
+TOP.ysyx_24080018.lsu.exu_mem_valid
+TOP.ysyx_24080018.lsu.wbu_mem_ready
+@1401200
+-lsu
+@c00200
+-exu
+@22
+TOP.ysyx_24080018.exu.o_waddr[4:0]
+TOP.ysyx_24080018.exu.i_waddr[4:0]
+@28
+TOP.ysyx_24080018.exu.exu_mem_valid
+TOP.ysyx_24080018.exu.cstate
+TOP.ysyx_24080018.exu.nstate
+TOP.ysyx_24080018.exu.idu_exu_valid
+@1401200
+-exu
+@c00200
+-idu
+@22
+TOP.ysyx_24080018.idu_waddr[4:0]
+TOP.ysyx_24080018.idu.i_inst[31:0]
+@28
+TOP.ysyx_24080018.idu.ifu_idu_valid
+@22
+TOP.ysyx_24080018.idu.o_rd[4:0]
+@28
+TOP.ysyx_24080018.idu.idu_exu_valid
+TOP.ysyx_24080018.idu.exu_idu_ready
+TOP.ysyx_24080018.idu.cstate
+TOP.ysyx_24080018.idu.nstate
+@1401200
+-idu
+@800200
+-ifu
+@28
+TOP.ysyx_24080018.ifu.cstate
+TOP.ysyx_24080018.ifu.o_ifu_rready
+@22
 TOP.ysyx_24080018.ifu.o_ifu_araddr[31:0]
+TOP.ysyx_24080018.ifu.i_ifu_rdata[31:0]
+@28
+TOP.ysyx_24080018.ifu.i_ifu_rvalid
+TOP.ysyx_24080018.ifu.prev_idle
+TOP.ysyx_24080018.ifu.nstate
+TOP.ysyx_24080018.ifu.i_ifu_rresp[1:0]
+[color] 2
+TOP.ysyx_24080018.ifu.ifu_idu_valid
+@1000200
+-ifu
+@28
+TOP.ysyx_24080018.ifu.retire
+@800200
+-master
+@22
+TOP.ysyx_24080018.arbiter.io_master_araddr[31:0]
+TOP.ysyx_24080018.arbiter.io_master_rdata[31:0]
+@28
+TOP.ysyx_24080018.arbiter.io_master_rvalid
+TOP.ysyx_24080018.arbiter.io_master_rready
+TOP.ysyx_24080018.arbiter.io_master_arvalid
+TOP.ysyx_24080018.arbiter.state[2:0]
+TOP.ysyx_24080018.arbiter.current_master
+TOP.ysyx_24080018.arbiter.o_ifu_rready
+TOP.ysyx_24080018.arbiter.i_ifu_rvalid
+TOP.ysyx_24080018.arbiter.current_master
+TOP.ysyx_24080018.arbiter.current_is_write
+TOP.ysyx_24080018.arbiter.response_valid
+@29
+TOP.ysyx_24080018.arbiter.io_master_rvalid
+@1000200
+-master
 [pattern_trace] 1
 [pattern_trace] 0

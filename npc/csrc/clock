@@ -1,0 +1,25 @@
+sim/sim.cpp:33:  top->eval();
+sim/sim.cpp:59:	root = top->rootp;
+sim/sim.cpp:88:    top->clock = !top->clock;
+sim/sim.cpp:93:    top->clock   = 0;
+sim/sim.cpp:94:    top->reset   = 1;
+sim/sim.cpp:99:    top->reset   = 0;
+include/sim/sim.h:26:#define   CLOCK   top->clock
+include/sim/sim.h:27:#define   RESET   top->reset
+include/sim/sim.h:28:#define   AWREADY top->io_master_awready
+include/sim/sim.h:29:#define   AWVALID top->io_master_awvalid
+include/sim/sim.h:30:#define   AWADDR  top->io_master_awaddr
+include/sim/sim.h:31:#define   WREADY  top->io_master_wready
+include/sim/sim.h:32:#define   WVALID  top->io_master_wvalid
+include/sim/sim.h:33:#define   WDATA   top->io_master_wdata
+include/sim/sim.h:34:#define   WSTRB   top->io_master_wstrb
+include/sim/sim.h:35:#define   BREADY  top->io_master_bready
+include/sim/sim.h:36:#define   BVALID  top->io_master_bvalid
+include/sim/sim.h:37:#define   BRESP   top->io_master_bresp
+include/sim/sim.h:38:#define   ARREADY top->io_master_arready
+include/sim/sim.h:39:#define   ARVALID top->io_master_arvalid
+include/sim/sim.h:40:#define   ARADDR  top->io_master_araddr
+include/sim/sim.h:41:#define   RREADY  top->io_master_rready
+include/sim/sim.h:42:#define   RVALID  top->io_master_valid
+include/sim/sim.h:43:#define   RRESP   top->io_master_rresp
+include/sim/sim.h:44:#define   RDATA   top->io_master_rdata

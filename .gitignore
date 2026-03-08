@@ -5,7 +5,11 @@
 !/nexus-am/*
 !/nanos-lite/*
 !/navy-apps/*
-!/npc/*
+!/npc/vsrc/*
+!/npc/csrc/*
+!/npc/Makefile
+!/npc/README
+!/npc/bin/*
 !Makefile
 !README.md
 !.gitignore
@@ -16,3 +20,4 @@
 /yosys-sta
 /rt-thread-am
 /ysyxSoC
+/*.swp

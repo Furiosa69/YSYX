@@ -62,7 +62,6 @@ class alignas(VL_CACHE_LINE_BYTES) Vysyx_24080018___024root final : public Veril
         CData/*0:0*/ ysyx_24080018__DOT__o_lsu_awvalid;
         CData/*0:0*/ ysyx_24080018__DOT__o_lsu_arvalid;
         CData/*0:0*/ ysyx_24080018__DOT__i_lsu_rvalid;
-        CData/*0:0*/ ysyx_24080018__DOT__i_lsu_wready;
         CData/*1:0*/ ysyx_24080018__DOT__i_lsu_bresp;
         CData/*0:0*/ ysyx_24080018__DOT__i_lsu_bvalid;
         CData/*0:0*/ ysyx_24080018__DOT__ifu_idu_valid;
@@ -80,9 +79,9 @@ class alignas(VL_CACHE_LINE_BYTES) Vysyx_24080018___024root final : public Veril
         CData/*2:0*/ ysyx_24080018__DOT__idu__DOT__csr_cnt;
         CData/*0:0*/ ysyx_24080018__DOT__idu__DOT__UType;
         CData/*0:0*/ ysyx_24080018__DOT__idu__DOT__IType;
+        CData/*0:0*/ ysyx_24080018__DOT__idu__DOT__cstate;
     };
     struct {
-        CData/*0:0*/ ysyx_24080018__DOT__idu__DOT__cstate;
         CData/*0:0*/ ysyx_24080018__DOT__idu__DOT__nstate;
         CData/*3:0*/ ysyx_24080018__DOT__idu__DOT____VdfgRegularize_h0640af09_0_9;
         CData/*0:0*/ ysyx_24080018__DOT__exu__DOT__cstate;
@@ -104,18 +103,18 @@ class alignas(VL_CACHE_LINE_BYTES) Vysyx_24080018___024root final : public Veril
         CData/*7:0*/ ysyx_24080018__DOT__lsu__DOT__byte_sel;
         CData/*0:0*/ ysyx_24080018__DOT__gpr__DOT__cstate;
         CData/*0:0*/ ysyx_24080018__DOT__csr__DOT__cstate;
-        CData/*2:0*/ ysyx_24080018__DOT__arbiter__DOT__state;
-        CData/*2:0*/ ysyx_24080018__DOT__arbiter__DOT__next_state;
-        CData/*0:0*/ ysyx_24080018__DOT__arbiter__DOT__lsu_req;
+        CData/*2:0*/ ysyx_24080018__DOT__arbiter__DOT__cstate;
+        CData/*2:0*/ ysyx_24080018__DOT__arbiter__DOT__nstate;
         CData/*0:0*/ ysyx_24080018__DOT__arbiter__DOT__current_master;
         CData/*0:0*/ ysyx_24080018__DOT__arbiter__DOT__current_is_write;
         CData/*1:0*/ ysyx_24080018__DOT__arbiter__DOT__captured_rresp;
         CData/*1:0*/ ysyx_24080018__DOT__arbiter__DOT__captured_bresp;
-        CData/*0:0*/ ysyx_24080018__DOT__arbiter__DOT__response_ready;
+        CData/*0:0*/ ysyx_24080018__DOT__arbiter__DOT__response_valid;
         CData/*0:0*/ ysyx_24080018__DOT__arbiter__DOT__last_master;
-        CData/*1:0*/ ysyx_24080018__DOT__arbiter__DOT____VdfgRegularize_hb99afc30_0_7;
-        CData/*0:0*/ ysyx_24080018__DOT__arbiter__DOT____VdfgRegularize_hb99afc30_0_9;
+        CData/*1:0*/ ysyx_24080018__DOT__arbiter__DOT____VdfgRegularize_hb99afc30_0_3;
+        CData/*0:0*/ ysyx_24080018__DOT__arbiter__DOT____VdfgRegularize_hb99afc30_0_5;
         CData/*0:0*/ __VdfgRegularize_he50b618e_0_0;
+        CData/*0:0*/ __VdfgRegularize_h6e95ff9d_0_4;
         CData/*0:0*/ __VstlFirstIteration;
         CData/*0:0*/ __VicoFirstIteration;
         CData/*0:0*/ __Vtrigprevexpr___TOP__clock__0;
@@ -138,6 +137,7 @@ class alignas(VL_CACHE_LINE_BYTES) Vysyx_24080018___024root final : public Veril
         IData/*31:0*/ ysyx_24080018__DOT__data_store;
         IData/*31:0*/ ysyx_24080018__DOT__imm;
         IData/*31:0*/ ysyx_24080018__DOT__csr_data;
+        IData/*31:0*/ ysyx_24080018__DOT__o_ifu_araddr;
         IData/*31:0*/ ysyx_24080018__DOT__ifu__DOT__target_pc;
         IData/*31:0*/ ysyx_24080018__DOT__ifu__DOT__temp_pc;
         IData/*31:0*/ ysyx_24080018__DOT__idu__DOT__imm;
@@ -151,8 +151,9 @@ class alignas(VL_CACHE_LINE_BYTES) Vysyx_24080018___024root final : public Veril
         IData/*31:0*/ ysyx_24080018__DOT__csr__DOT__mcycleh;
         IData/*31:0*/ ysyx_24080018__DOT__csr__DOT__mvendorid;
         IData/*31:0*/ ysyx_24080018__DOT__csr__DOT__marchid;
+        IData/*31:0*/ ysyx_24080018__DOT__arbiter__DOT__current_addr;
         IData/*31:0*/ ysyx_24080018__DOT__arbiter__DOT__captured_rdata;
-        IData/*31:0*/ ysyx_24080018__DOT__arbiter__DOT____VdfgRegularize_hb99afc30_0_6;
+        IData/*31:0*/ ysyx_24080018__DOT__arbiter__DOT____VdfgRegularize_hb99afc30_0_2;
         IData/*31:0*/ __VactIterCount;
         VlUnpacked<IData/*31:0*/, 32> ysyx_24080018__DOT__gpr__DOT__rf;
         VlUnpacked<QData/*63:0*/, 1> __VstlTriggered;
