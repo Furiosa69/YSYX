@@ -5,11 +5,10 @@
 !/nexus-am/*
 !/nanos-lite/*
 !/navy-apps/*
-!/npc/vsrc/*
-!/npc/csrc/*
+!/npc/vsrc/
+!/npc/csrc/
 !/npc/Makefile
-!/npc/README
-!/npc/bin/*
+!/npc/README.md
 !Makefile
 !README.md
 !.gitignore

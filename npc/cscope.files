@@ -1,8 +1,0 @@
-./vsrc/LSU.v
-./vsrc/EXU.v
-./vsrc/IFU.v
-./vsrc/CSR.v
-./vsrc/GPR.v
-./vsrc/top.v
-./vsrc/ysyx_24080018.v
-./vsrc/IDU.v
