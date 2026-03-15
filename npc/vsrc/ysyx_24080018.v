@@ -1,6 +1,4 @@
-parameter logic [31:0] GPR_WIDTH = 5;
-parameter logic [31:0] PC_WIDTH  = 32;
-parameter logic [31:0] INS_WIDTH = 32;
+import "DPI-C" function void NPCTRAP(input int unsigned pc, input int x10);
 
 module ysyx_24080018(
   input           clock,
@@ -29,257 +27,247 @@ module ysyx_24080018(
   input  [31:0]   io_master_rdata
 );
 
-wire [GPR_WIDTH-1:0] idu_waddr,exu_waddr,mem_waddr;
-wire [GPR_WIDTH-1:0] raddr1,raddr2;
-wire [PC_WIDTH-1 :0] ifu_pc,idu_pc,exu_pc,mem_pc;
-wire [INS_WIDTH-1:0] inst;
-wire [ 3:0] idu_lsu_cnt,exu_lsu_cnt;
-wire        idu_wbu_cnt,exu_wbu_cnt,mem_wbu_cnt;
-wire        idu_ebreak,exu_ebreak,mem_ebreak;
-wire [31:0] exu_wdata,mem_wdata;
-wire [ 3:0] alu_cnt;
-wire [ 5:0] ins_cnt;
-wire [ 2:0] idu_csr_cnt,exu_csr_cnt;
-wire [ 3:0] pc_cnt;
-wire [31:0] rdata1,rdata2;
-wire [31:0] addr_lsu;
-wire [31:0] data_store;
-wire [31:0] imm;
-wire [11:0] csr_imm;
-wire [31:0] csr_data;
-wire        br_taken;
-wire        auipc,lui,load,jalr,jal;
-wire        ControlHazard;
+wire ifu_idu_valid,idu_ifu_ready;
+wire idu_exu_valid,exu_idu_ready;
+wire exu_lsu_valid,lsu_exu_ready;
+wire lsu_wbu_valid,wbu_lsu_ready;
 
-wire [31:0] o_ifu_araddr;
-wire        o_ifu_arvalid;
-wire        i_ifu_arready;
-wire [31:0] i_ifu_rdata;
-wire [ 1:0] i_ifu_rresp;
-wire        i_ifu_rvalid;
-wire        o_ifu_rready;
-wire [31:0] o_lsu_awaddr ;
-wire        o_lsu_awvalid;
-wire        i_lsu_awready;
-wire [31:0] o_lsu_araddr ;
-wire        o_lsu_arvalid;
-wire        i_lsu_arready;
-wire [31:0] i_lsu_rdata  ;
-wire [ 1:0] i_lsu_rresp  ;
-wire        i_lsu_rvalid ;
-wire        o_lsu_rready ;
-wire [31:0] o_lsu_wdata  ;
-wire [ 3:0] o_lsu_wstrb  ;
-wire        o_lsu_wvalid ;
-wire        i_lsu_wready ;
-wire [ 1:0] i_lsu_bresp  ;
-wire        i_lsu_bvalid ;
-wire        o_lsu_bready ;
+wire ebreak;
 
-wire ifu_idu_valid,idu_exu_valid,exu_mem_valid,mem_wbu_valid,exu_csr_valid;
-wire idu_ifu_ready,exu_idu_ready,mem_exu_ready,wbu_mem_ready,csr_exu_ready;
-wire wbu_ifu_retire,csr_ifu_retire;
+wire [31:0] ifu_pc,idu_pc,exu_pc,lsu_pc;
+wire [31:0] ifu_inst;
 
-wire [31:0] ret_addr;
-assign ret_addr = (mem_waddr == raddr1) ? mem_wdata : rdata1;
+wire [ 4:0] idu_rd,idu_rs1,idu_rs2;
+wire        idu_lui,idu_auipc,idu_jal,idu_jalr;
+wire [31:0] idu_imm;
+wire [11:0] idu_csr_imm;
+wire [ 3:0] idu_alu_cnt;
+wire [ 3:0] idu_pc_cnt;
+wire [ 3:0] idu_lsu_cnt;
+wire [ 2:0] idu_csr_cnt;
+wire [ 5:0] idu_ins_cnt;
+wire        idu_wbu_cnt;
+
+wire [31:0] wbu_rdata1, wbu_rdata2;
+wire [ 4:0] exu_waddr;
+wire [31:0] exu_wdata;
+wire        exu_br_taken;
+wire [31:0] exu_br_target;
+wire        exu_wbu_cnt;
+wire [ 2:0] exu_csr_cnt;
+wire [ 3:0] exu_lsu_cnt;
+wire [31:0] exu_lsu_wdata, exu_lsu_waddr, exu_lsu_raddr;
+wire [ 4:0] exu_raddr1, exu_raddr2;
+wire [ 4:0] lsu_raddr1, lsu_raddr2, lsu_waddr;
+wire [31:0] lsu_wdata;
+wire        lsu_wbu_cnt;
+
+wire        io_ifu_arready;
+wire        io_ifu_arvalid;
+wire [31:0] io_ifu_araddr ;
+wire        io_ifu_rready ;
+wire        io_ifu_rvalid ;
+wire [ 1:0] io_ifu_rresp  ;
+wire [31:0] io_ifu_rdata  ;
+wire        io_lsu_awready;
+wire        io_lsu_awvalid;
+wire [31:0] io_lsu_awaddr ;
+wire        io_lsu_wready ;
+wire        io_lsu_wvalid ;
+wire [31:0] io_lsu_wdata  ;
+wire [ 3:0] io_lsu_wstrb  ;
+wire        io_lsu_bready ;
+wire        io_lsu_bvalid ;
+wire [ 1:0] io_lsu_bresp  ;
+wire        io_lsu_arready;
+wire        io_lsu_arvalid;
+wire [31:0] io_lsu_araddr ;
+wire        io_lsu_rready ;
+wire        io_lsu_rvalid ;
+wire [ 1:0] io_lsu_rresp  ;
+wire [31:0] io_lsu_rdata  ;
 
 ysyx_24080018_IFU ifu(
-  .clock          (clock),
-  .reset          (reset),
+  .clock          (clock        ),
+  .reset          (reset        ),
   .ifu_idu_valid  (ifu_idu_valid),
   .idu_ifu_ready  (idu_ifu_ready),
-  .wbu_ifu_retire (wbu_ifu_retire),
-  .csr_ifu_retire (csr_ifu_retire),
-  .i_ControlHazard(ControlHazard),
-  .i_imm          (imm),
-  .i_br_taken     (br_taken),
-  .i_pc_idu       (idu_pc),
-  .i_ret          (ret_addr),
-  .i_pc_cnt       (pc_cnt),
-  .o_inst         (inst),
-  .o_pc           (ifu_pc),
+  .o_inst         (ifu_inst     ),
+  .o_pc           (ifu_pc       ),
 
-  .o_ifu_araddr   (o_ifu_araddr ),
-  .o_ifu_arvalid  (o_ifu_arvalid),
-  .i_ifu_arready  (i_ifu_arready),
-  .i_ifu_rdata    (i_ifu_rdata  ),
-  .i_ifu_rresp    (i_ifu_rresp  ),
-  .i_ifu_rvalid   (i_ifu_rvalid ),
-  .o_ifu_rready   (o_ifu_rready )
+  .i_br_taken     (exu_br_taken ),
+  .i_br_target    (exu_br_target),
+
+  .o_ifu_araddr   (io_ifu_araddr ),
+  .o_ifu_arvalid  (io_ifu_arvalid),
+  .i_ifu_arready  (io_ifu_arready),
+  .i_ifu_rdata    (io_ifu_rdata  ),
+  .i_ifu_rresp    (io_ifu_rresp  ),
+  .i_ifu_rvalid   (io_ifu_rvalid ),
+  .o_ifu_rready   (io_ifu_rready )
 );
 
 ysyx_24080018_IDU idu(
-  .clock          (clock),
-  .reset          (reset),
-  .ifu_idu_valid  (ifu_idu_valid),
-  .idu_ifu_ready  (idu_ifu_ready),
-  .idu_exu_valid  (idu_exu_valid),
-  .exu_idu_ready  (exu_idu_ready),
-  .i_inst         (inst),
-  .i_pc           (ifu_pc),
-  .o_pc           (idu_pc),
-  .o_lsu_cnt      (idu_lsu_cnt),
-  .o_wbu_cnt      (idu_wbu_cnt),
-  .o_alu_cnt      (alu_cnt),
-  .o_ins_cnt      (ins_cnt),
-  .o_csr_cnt      (idu_csr_cnt),
-  .o_pc_cnt       (pc_cnt),
-  .o_auipc        (auipc),
-  .o_lui          (lui),
-  .o_ebreak       (idu_ebreak),
-  .o_jalr         (jalr),
-  .o_jal          (jal),
-  .o_load         (load),
-  .o_rd           (idu_waddr),
-  .o_rs1          (raddr1),
-  .o_rs2          (raddr2),
-  .o_csr_imm      (csr_imm),
-  .o_imm          (imm),
-  .o_ControlHazard(ControlHazard)
+  .clock         (clock        ),
+  .reset         (reset        ),
+  .ifu_idu_valid (ifu_idu_valid),
+  .idu_ifu_ready (idu_ifu_ready),
+  .idu_exu_valid (idu_exu_valid),
+  .exu_idu_ready (exu_idu_ready),
+  .i_br_taken    (exu_br_taken ),
+  .i_inst        (ifu_inst     ),
+  .o_lui         (idu_lui      ),
+  .o_auipc       (idu_auipc    ),
+  .o_jal         (idu_jal      ),
+  .o_jalr        (idu_jalr     ),
+  .ebreak        (ebreak       ),
+  .i_pc          (ifu_pc       ),
+  .o_pc          (idu_pc       ),
+  .o_rs1         (idu_rs1      ),
+  .o_rs2         (idu_rs2      ),
+  .o_rd          (idu_rd       ),
+  .o_imm         (idu_imm      ),
+  .o_csr_imm     (idu_csr_imm  ),
+  .o_alu_cnt     (idu_alu_cnt  ),
+  .o_pc_cnt      (idu_pc_cnt   ),
+  .o_lsu_cnt     (idu_lsu_cnt  ),
+  .o_csr_cnt     (idu_csr_cnt  ),
+  .o_ins_cnt     (idu_ins_cnt  ),
+  .o_wbu_cnt     (idu_wbu_cnt  )
 );
 
 ysyx_24080018_EXU exu(
-  .clock          (clock),
-  .reset          (reset),
+  .clock         (clock        ),
+  .reset         (reset        ),
   .idu_exu_valid (idu_exu_valid),
   .exu_idu_ready (exu_idu_ready),
-  .exu_mem_valid (exu_mem_valid),
-  .mem_exu_ready (mem_exu_ready),
-  .exu_csr_valid (exu_csr_valid),
-  .csr_exu_ready (csr_exu_ready),
-  .o_pc          (exu_pc),
-  .o_alu_result  (exu_wdata),
-  .o_br_taken    (br_taken),
-  .o_data_store  (data_store),
-  .o_addr_lsu    (addr_lsu),
-  .o_waddr       (exu_waddr),
-  .o_lsu_cnt     (exu_lsu_cnt),
-  .o_ebreak      (exu_ebreak),
-  .o_wbu_cnt     (exu_wbu_cnt),
-  .o_csr_cnt     (exu_csr_cnt),
-  .i_pc          (idu_pc),
-  .i_wbu_cnt     (idu_wbu_cnt),
-  .i_ebreak      (idu_ebreak),
-  .i_lsu_cnt     (idu_lsu_cnt),
-  .i_waddr       (idu_waddr),
-  .i_pc_cnt      (pc_cnt),
-  .i_alu_cnt     (alu_cnt),
-  .i_ins_cnt     (ins_cnt),
-  .i_csr_cnt     (idu_csr_cnt),
-  .i_auipc       (auipc),
-  .i_lui         (lui),
-  .i_load        (load),
-  .i_jalr        (jalr),
-  .i_jal         (jal),
-  .i_imm         (imm),
-  .i_csr_data    (csr_data),
-  .i_rdata1      (rdata1),
-  .i_rdata2      (rdata2),
-  .i_raddr1      (raddr1),
-  .i_raddr2      (raddr2),
-  .i_bypass_waddr(mem_waddr),
-  .i_bypass_wdata(mem_wdata)
-
+  .exu_lsu_valid (exu_lsu_valid),
+  .lsu_exu_ready (lsu_exu_ready),
+  .i_auipc       (idu_auipc    ),
+  .i_lui         (idu_lui      ),
+  .i_jal         (idu_jal      ),
+  .i_jalr        (idu_jalr     ),
+  .i_pc          (idu_pc       ),
+  .o_pc          (exu_pc       ),
+  .i_imm         (idu_imm      ),
+  .i_rdata1      (wbu_rdata1   ),
+  .i_rdata2      (wbu_rdata2   ),
+  .i_waddr       (idu_rd       ),
+  .i_rs1         (idu_rs1      ),
+  .i_rs2         (idu_rs2      ),
+  .o_waddr       (exu_waddr    ),
+  .o_alu_result  (exu_wdata    ),
+  .o_br_taken    (exu_br_taken ),
+  .o_br_target   (exu_br_target),
+  .i_ins_cnt     (idu_ins_cnt  ),
+  .i_pc_cnt      (idu_pc_cnt   ),
+  .i_alu_cnt     (idu_alu_cnt  ),
+  .i_csr_cnt     (idu_csr_cnt  ),
+  .i_lsu_cnt     (idu_lsu_cnt  ),
+  .i_wbu_cnt     (idu_wbu_cnt  ),
+  .o_wbu_cnt     (exu_wbu_cnt  ),
+  .o_csr_cnt     (exu_csr_cnt  ),
+  .o_lsu_cnt     (exu_lsu_cnt  ),
+  .o_lsu_wdata   (exu_lsu_wdata),
+  .o_lsu_waddr   (exu_lsu_waddr),
+  .o_lsu_raddr   (exu_lsu_raddr),
+  .o_raddr1         (exu_raddr1   ),
+  .o_raddr2         (exu_raddr2   ),
+  .i_fwd_exu_waddr  (exu_waddr    ),
+  .i_fwd_exu_wdata  (exu_wdata    ),
+  .i_fwd_exu_wen    (exu_wbu_cnt  ),
+  .i_fwd_lsu_waddr  (lsu_waddr    ),
+  .i_fwd_lsu_wdata  (lsu_wdata    ),
+  .i_fwd_lsu_wen    (lsu_wbu_cnt  )
 );
 
 ysyx_24080018_LSU lsu(
-  .clock          (clock        ),
-  .reset          (reset        ),
-  .exu_mem_valid  (exu_mem_valid),
-  .mem_exu_ready  (mem_exu_ready),
-  .mem_wbu_valid  (mem_wbu_valid),
-  .wbu_mem_ready  (wbu_mem_ready),
-  .o_waddr        (mem_waddr    ),
-  .o_wdata        (mem_wdata    ),
-  .o_ebreak       (mem_ebreak   ),
-  .o_pc           (mem_pc       ),
-  .o_wbu_cnt      (mem_wbu_cnt  ),
-  .i_pc           (exu_pc       ),
-  .i_wbu_cnt      (exu_wbu_cnt  ),
-  .i_ebreak       (exu_ebreak   ),
-  .i_waddr        (exu_waddr    ),
-  .i_wdata        (exu_wdata    ),
-  .i_lsu_cnt      (exu_lsu_cnt  ),
-  .i_lsu_wdata    (data_store   ),
-  .i_lsu_addr     (addr_lsu     ),
-
-  .o_lsu_awaddr   (o_lsu_awaddr ),
-  .o_lsu_awvalid  (o_lsu_awvalid),
-  .i_lsu_awready  (i_lsu_awready),
-  .o_lsu_araddr   (o_lsu_araddr ),
-  .o_lsu_arvalid  (o_lsu_arvalid),
-  .i_lsu_arready  (i_lsu_arready),
-  .i_lsu_rdata    (i_lsu_rdata  ),
-  .i_lsu_rresp    (i_lsu_rresp  ),
-  .i_lsu_rvalid   (i_lsu_rvalid ),
-  .o_lsu_rready   (o_lsu_rready ),
-  .o_lsu_wdata    (o_lsu_wdata  ),
-  .o_lsu_wstrb    (o_lsu_wstrb  ),
-  .o_lsu_wvalid   (o_lsu_wvalid ),
-  .i_lsu_wready   (i_lsu_wready ),
-  .i_lsu_bresp    (i_lsu_bresp  ),
-  .i_lsu_bvalid   (i_lsu_bvalid ),
-  .o_lsu_bready   (o_lsu_bready )
+  .clock         (clock         ),
+  .reset         (reset         ),
+  .exu_lsu_valid (exu_lsu_valid ),
+  .lsu_exu_ready (lsu_exu_ready ),
+  .lsu_wbu_valid (lsu_wbu_valid ),
+  .wbu_lsu_ready (wbu_lsu_ready ),
+  .i_raddr1      (exu_raddr1    ),
+  .i_raddr2      (exu_raddr2    ),
+  .i_waddr       (exu_waddr     ),
+  .i_wdata       (exu_wdata     ),
+  .i_pc          (exu_pc        ),
+  .i_wbu_cnt     (exu_wbu_cnt   ),
+  .i_lsu_cnt     (exu_lsu_cnt   ),
+  .i_lsu_wdata   (exu_lsu_wdata ),
+  .i_lsu_waddr   (exu_lsu_waddr ),
+  .i_lsu_raddr   (exu_lsu_raddr ),
+  .o_raddr1      (lsu_raddr1    ),
+  .o_raddr2      (lsu_raddr2    ),
+  .o_waddr       (lsu_waddr     ),
+  .o_wdata       (lsu_wdata     ),
+  .o_pc          (lsu_pc        ),
+  .o_wbu_cnt     (lsu_wbu_cnt   ),
+  .o_lsu_awaddr  (io_lsu_awaddr ),
+  .o_lsu_awvalid (io_lsu_awvalid),
+  .i_lsu_awready (io_lsu_awready),
+  .o_lsu_araddr  (io_lsu_araddr ),
+  .o_lsu_arvalid (io_lsu_arvalid),
+  .i_lsu_arready (io_lsu_arready),
+  .i_lsu_rdata   (io_lsu_rdata  ),
+  .i_lsu_rresp   (io_lsu_rresp  ),
+  .i_lsu_rvalid  (io_lsu_rvalid ),
+  .o_lsu_rready  (io_lsu_rready ),
+  .o_lsu_wdata   (io_lsu_wdata  ),
+  .o_lsu_wstrb   (io_lsu_wstrb  ),
+  .o_lsu_wvalid  (io_lsu_wvalid ),
+  .i_lsu_wready  (io_lsu_wready ),
+  .i_lsu_bresp   (io_lsu_bresp  ),
+  .i_lsu_bvalid  (io_lsu_bvalid ),
+  .o_lsu_bready  (io_lsu_bready )
 );
 
-ysyx_24080018_GPR gpr(
-  .clock          (clock),
-  .reset          (reset),
-  .mem_wbu_valid  (mem_wbu_valid),
-  .wbu_mem_ready  (wbu_mem_ready),
-  .wbu_ifu_retire (wbu_ifu_retire),
-  .rdata1         (rdata1),
-  .rdata2         (rdata2),
-  .raddr1         (raddr1),
-  .raddr2         (raddr2),
-  .i_wbu_cnt      (mem_wbu_cnt),
-  .i_ebreak       (mem_ebreak),
-  .i_pc           (mem_pc),
-  .i_waddr        (mem_waddr),
-  .i_wdata        (mem_wdata)
-);
-
-ysyx_24080018_CSR csr(
-  .clock          (clock),
-  .reset          (reset),
-  .exu_csr_valid  (exu_csr_valid),
-  .csr_exu_ready  (csr_exu_ready),
-  .csr_ifu_retire (csr_ifu_retire),
-  .i_csr_cnt      (exu_csr_cnt),
-  .i_csr_imm      (csr_imm),
-  .i_wdata        (rdata1),
-  .o_rdata        (csr_data)
+ysyx_24080018_WBU wbu(
+  .clock         (clock        ),
+  .reset         (reset        ),
+  .lsu_wbu_valid (lsu_wbu_valid),
+  .wbu_lsu_ready (wbu_lsu_ready),
+  .rdata1        (wbu_rdata1   ),
+  .rdata2        (wbu_rdata2   ),
+  .i_raddr1      (lsu_raddr1   ),
+  .i_raddr2      (lsu_raddr2   ),
+  .i_waddr       (lsu_waddr    ),
+  .i_wdata       (lsu_wdata    ),
+  .i_pc          (lsu_pc       ),
+  .ebreak        (ebreak       ),
+  .i_wbu_cnt     (lsu_wbu_cnt  )
 );
 
 ysyx_24080018_arbiter arbiter(
-  .clock         (clock),
-  .reset         (reset),
+  .clock         (clock        ),
+  .reset         (reset        ),
 
-  .o_ifu_araddr  (o_ifu_araddr ),
-  .o_ifu_arvalid (o_ifu_arvalid),
-  .i_ifu_arready (i_ifu_arready),
-  .i_ifu_rdata   (i_ifu_rdata  ),
-  .i_ifu_rresp   (i_ifu_rresp  ),
-  .i_ifu_rvalid  (i_ifu_rvalid ),
-  .o_ifu_rready  (o_ifu_rready ),
+  .o_ifu_araddr  (io_ifu_araddr ),
+  .o_ifu_arvalid (io_ifu_arvalid),
+  .i_ifu_arready (io_ifu_arready),
+  .i_ifu_rdata   (io_ifu_rdata  ),
+  .i_ifu_rresp   (io_ifu_rresp  ),
+  .i_ifu_rvalid  (io_ifu_rvalid ),
+  .o_ifu_rready  (io_ifu_rready ),
 
-  .o_lsu_awaddr  (o_lsu_awaddr ),
-  .o_lsu_awvalid (o_lsu_awvalid),
-  .i_lsu_awready (i_lsu_awready),
-  .o_lsu_araddr  (o_lsu_araddr ),
-  .o_lsu_arvalid (o_lsu_arvalid),
-  .i_lsu_arready (i_lsu_arready),
-  .i_lsu_rdata   (i_lsu_rdata  ),
-  .i_lsu_rresp   (i_lsu_rresp  ),
-  .i_lsu_rvalid  (i_lsu_rvalid ),
-  .o_lsu_rready  (o_lsu_rready ),
-  .o_lsu_wdata   (o_lsu_wdata  ),
-  .o_lsu_wstrb   (o_lsu_wstrb  ),
-  .o_lsu_wvalid  (o_lsu_wvalid ),
-  .i_lsu_wready  (i_lsu_wready ),
-  .i_lsu_bresp   (i_lsu_bresp  ),
-  .i_lsu_bvalid  (i_lsu_bvalid ),
-  .o_lsu_bready  (o_lsu_bready ),
+  .o_lsu_awaddr  (io_lsu_awaddr ),
+  .o_lsu_awvalid (io_lsu_awvalid),
+  .i_lsu_awready (io_lsu_awready),
+  .o_lsu_araddr  (io_lsu_araddr ),
+  .o_lsu_arvalid (io_lsu_arvalid),
+  .i_lsu_arready (io_lsu_arready),
+  .i_lsu_rdata   (io_lsu_rdata  ),
+  .i_lsu_rresp   (io_lsu_rresp  ),
+  .i_lsu_rvalid  (io_lsu_rvalid ),
+  .o_lsu_rready  (io_lsu_rready ),
+  .o_lsu_wdata   (io_lsu_wdata  ),
+  .o_lsu_wstrb   (io_lsu_wstrb  ),
+  .o_lsu_wvalid  (io_lsu_wvalid ),
+  .i_lsu_wready  (io_lsu_wready ),
+  .i_lsu_bresp   (io_lsu_bresp  ),
+  .i_lsu_bvalid  (io_lsu_bvalid ),
+  .o_lsu_bready  (io_lsu_bready ),
 
   .io_master_awready (io_master_awready),
   .io_master_awvalid (io_master_awvalid),
@@ -302,999 +290,785 @@ ysyx_24080018_arbiter arbiter(
 endmodule
 
 module ysyx_24080018_IFU(
-  input             clock,
-  input             reset,
+  input wire         clock,
+  input wire         reset,
 
-  output            ifu_idu_valid,
-  input             idu_ifu_ready,
-  input             wbu_ifu_retire,
-  input             csr_ifu_retire,
+  output reg         ifu_idu_valid,
+  input wire         idu_ifu_ready,
 
-  input             i_ControlHazard,
-  input      [31:0] i_imm,
-  input             i_br_taken,
-  input      [PC_WIDTH-1:0] i_pc_idu,
-  input      [31:0] i_ret,
-  input      [ 3:0] i_pc_cnt,
+  // 来自 EXU 的跳转信号
+  input wire         i_br_taken,
+  input wire [31:0]  i_br_target,
 
-  output     [INS_WIDTH-1:0] o_inst,
-  output reg [PC_WIDTH-1:0] o_pc,
+  output reg [31:0]  o_ifu_araddr,
+  output reg         o_ifu_arvalid,
+  input wire         i_ifu_arready,
+  input wire [31:0]  i_ifu_rdata,
+  input wire [ 1:0]  i_ifu_rresp,
+  input wire         i_ifu_rvalid,
+  output reg         o_ifu_rready,
 
-  output     [31:0] o_ifu_araddr   ,
-  output            o_ifu_arvalid  ,
-  input             i_ifu_arready  ,
-
-  input      [31:0] i_ifu_rdata    ,
-  input      [ 1:0] i_ifu_rresp    ,
-  input             i_ifu_rvalid   ,
-  output            o_ifu_rready
+  output reg [31:0]  o_inst,
+  output reg [31:0]  o_pc
 );
 
-  wire jalr  = (i_pc_cnt === 4'b1000);
-  wire jal   = (i_pc_cnt === 4'b0111);
-  wire bxx   = (i_pc_cnt === 4'b0001) | (i_pc_cnt === 4'b0010) | (i_pc_cnt === 4'b0011) |
-               (i_pc_cnt === 4'b0100) | (i_pc_cnt === 4'b0101) | (i_pc_cnt === 4'b0110);
+reg [31:0] pc;
+// 跳转发生后，已取回但尚未送给 IDU 的指令需要丢弃
+reg        flush_pending;
 
-  wire [PC_WIDTH-1:0] target_pc;
-  wire retire;
-  assign retire = wbu_ifu_retire || csr_ifu_retire;
-  assign target_pc  = (bxx && !i_br_taken) ? o_pc :
-                      (bxx &&  i_br_taken) ? (i_ControlHazard ? i_pc_idu + i_imm : o_pc + i_imm) :
-                      (jal               ) ? (i_ControlHazard ? i_pc_idu + i_imm : o_pc + i_imm) :
-                      (jalr              ) ? i_ret          :
-                      o_pc + 32'd4;
+wire ifu_idu_handshake = ifu_idu_valid && idu_ifu_ready;
+wire ar_handshake = o_ifu_arvalid && i_ifu_arready;
+wire r_handshake  = i_ifu_rvalid  && o_ifu_rready;
+// 本拍正在接收数据（ifu_idu_valid 下拍才更新，需要组合信号提前屏蔽重复取指）
+wire inst_arriving = r_handshake;
 
-  localparam logic IDLE = 1'b0;
-  localparam logic WAIT = 1'b1;
-  reg cstate, nstate;
-  reg [PC_WIDTH-1:0] temp_pc;
+// PC 更新：跳转时加载目标地址，否则握手后 +4
+always_ff @(posedge clock) begin
+  if (reset) begin
+    pc <= 32'h80000000;
+  end else if (i_br_taken) begin
+    pc <= i_br_target;
+  end else if (ifu_idu_handshake) begin
+    pc <= pc + 32'd4;
+  end
+end
 
-  assign o_ifu_rready   = (cstate == IDLE);
-  assign ifu_idu_valid  = i_ifu_rvalid && (i_ifu_rresp == 2'h0) && (cstate == WAIT) && prev_idle;
-  assign o_ifu_araddr   = (temp_pc != o_pc) && (temp_pc != 0) ? temp_pc : o_pc;
+// AR 通道：跳转时立即发起新地址的取指请求
+always_ff @(posedge clock) begin
+  if (reset) begin
+    o_ifu_arvalid <= 1'b0;
+    o_ifu_araddr  <= 32'h80000000;
+  end else if (i_br_taken) begin
+    // 跳转：取消当前未完成的请求，发起跳转目标地址请求
+    o_ifu_arvalid <= 1'b1;
+    o_ifu_araddr  <= i_br_target;
+  end else if (ar_handshake) begin
+    o_ifu_arvalid <= 1'b0;
+  end else if (~o_ifu_arvalid && ifu_idu_handshake) begin
+    o_ifu_arvalid <= 1'b1;
+    o_ifu_araddr  <= pc + 4;
+  end else if (~o_ifu_arvalid && ~ifu_idu_valid && ~inst_arriving) begin
+    o_ifu_arvalid <= 1'b1;
+    o_ifu_araddr  <= pc;
+  end
+end
 
-  reg prev_idle;
-  assign o_ifu_arvalid  = !reset && (cstate == IDLE) ;
-//                        (!prev_idle  && !i_ControlHazard) &&       // 刚进入IDLE且无冒险
-//                          (i_ifu_arready)
-//                        ) ? 1'b1 : 1'b0;
+// flush_pending：跳转发生后，下一条取回的指令需要丢弃
+always_ff @(posedge clock) begin
+  if (reset) begin
+    flush_pending <= 1'b0;
+  end else if (i_br_taken) begin
+    // 跳转时只要 AR 已发出（无论是否同拍握手），响应都是旧地址的，需要丢弃
+    flush_pending <= o_ifu_arvalid;
+  end else if (r_handshake) begin
+    flush_pending <= 1'b0;
+  end
+end
 
-  always_ff @(posedge clock) begin
-    if(reset) begin
-      o_pc <= 32'h80000000;
-      prev_idle <= 1'b0;
-      temp_pc <= 0;
-    end else begin
-      prev_idle <= (cstate == IDLE);
-      if (i_ControlHazard) begin
-        temp_pc <= target_pc; // 没办法改变了
-      end else if (retire) begin
-        o_pc <= (temp_pc != o_pc ) && (temp_pc != 0 ) ? temp_pc : target_pc;
+// 指令寄存器和 valid 控制
+always_ff @(posedge clock) begin
+  if (reset) begin
+    ifu_idu_valid <= 1'b0;
+    o_inst        <= 32'h0;
+    o_pc          <= 32'h80000000;
+    o_ifu_rready  <= 1'b1;
+  end else begin
+    o_ifu_rready <= 1'b1;
+    if (i_br_taken) begin
+      // 跳转：丢弃已锁存的指令
+      ifu_idu_valid <= 1'b0;
+    end else if (r_handshake && (i_ifu_rresp == 2'b00)) begin
+      if (flush_pending) begin
+        // 这条取回的指令是跳转前预取的，丢弃
+        ifu_idu_valid <= 1'b0;
+      end else begin
+        o_inst        <= i_ifu_rdata;
+        o_pc          <= pc;
+        ifu_idu_valid <= 1'b1;
       end
-      if (o_ifu_arvalid) begin
-        temp_pc <= 0;
-      end
+    end else if (ifu_idu_handshake) begin
+      ifu_idu_valid <= 1'b0;
     end
   end
-
-  assign o_inst = i_ifu_rdata;
-
-  always_ff @(posedge clock) begin
-    if(reset) begin
-      cstate <= IDLE;
-    end else begin
-      cstate <= nstate;
-    end
-  end
-
-  always_comb begin
-    case (cstate)
-      IDLE : begin
-        if (i_ControlHazard) begin
-          nstate = IDLE;
-        end else if ((target_pc != o_pc) && i_ifu_rvalid && (i_ifu_rresp == 2'h0)) begin
-          nstate = WAIT;
-        end else begin
-          nstate = IDLE;
-        end
-      end
-      WAIT : begin
-        if (i_ControlHazard) begin
-          nstate = WAIT;
-        end else if (retire) begin
-          if (target_pc != o_pc) begin
-            nstate = IDLE;
-          end else begin
-            nstate = WAIT;
-          end
-        end else begin
-          nstate = WAIT;
-        end
-      end
-      default: begin
-        nstate = IDLE;
-      end
-    endcase
-  end
+end
 
 endmodule
 
 module ysyx_24080018_IDU (
-  input             clock,
-  input             reset,
+  input wire        clock,
+  input wire        reset,
 
-  input             ifu_idu_valid,
-  output            idu_ifu_ready,
-  output            idu_exu_valid,
-  input             exu_idu_ready,
+  input wire        ifu_idu_valid,
+  output reg        idu_ifu_ready,
+  output reg        idu_exu_valid,
+  input wire        exu_idu_ready,
 
-  input      [INS_WIDTH-1:0] i_inst,
-  input      [PC_WIDTH-1:0] i_pc,
+  input wire        i_br_taken,
 
-  output reg [PC_WIDTH-1:0] o_pc,
-  output reg [ 3:0] o_pc_cnt,
-  output reg [ 3:0] o_lsu_cnt,
-  output reg        o_wbu_cnt,
-  output reg [ 3:0] o_alu_cnt,
-  output reg [ 5:0] o_ins_cnt,
-  output reg [ 2:0] o_csr_cnt,
-  output reg [GPR_WIDTH-1:0] o_rs1,
-  output reg [GPR_WIDTH-1:0] o_rs2,
-  output reg [GPR_WIDTH-1:0] o_rd,
+  input wire [31:0] i_inst,
+  input wire [31:0] i_pc,
+
+  output reg        o_lui,
+  output reg        o_jalr,
+  output reg        o_auipc,
+  output reg        o_jal,
+  output wire       ebreak,
+
+  output reg [31:0] o_pc,
+  output reg [ 4:0] o_rs1,
+  output reg [ 4:0] o_rs2,
+  output reg [ 4:0] o_rd,
   output reg [31:0] o_imm,
   output reg [11:0] o_csr_imm,
-  output reg        o_auipc,
-  output reg        o_lui,
-  output reg        o_ebreak,
-  output reg        o_load,
-  output reg        o_jal,
-  output reg        o_jalr,
-  output reg        o_ControlHazard
+  output reg [ 3:0] o_alu_cnt,
+  output reg [ 3:0] o_pc_cnt,
+  output reg [ 3:0] o_lsu_cnt,
+  output reg [ 2:0] o_csr_cnt,
+  output reg [ 5:0] o_ins_cnt,
+  output reg        o_wbu_cnt
 );
 
-  wire [ 6:0] opcode;
-  wire [ 2:0] fun3;
-  wire [ 6:0] fun7;
-  wire [ 3:0] pc_cnt;
-  wire [ 3:0] lsu_cnt;
-  wire        wbu_cnt;
-  wire [ 3:0] alu_cnt;
-  wire [ 5:0] ins_cnt;
-  wire [ 2:0] csr_cnt;
-  wire [GPR_WIDTH-1:0] rs1;
-  wire [GPR_WIDTH-1:0] rs2;
-  wire [ 4:0] rd;
-  wire [31:0] imm;
-  wire [11:0] csr_imm;
-  wire        auipc;
-  wire        lui;
-  wire        ebreak;
-  wire        load;
-  wire        jal;
-  wire        jalr;
+wire [ 6:0] opcode;
+wire [ 2:0] fun3;
+wire [ 6:0] fun7;
+wire [ 4:0] rs1, rs2, rd;
+wire [31:0] imm;
+wire [11:0] csr_imm;
+wire        auipc, lui, load, jal, jalr, ecall, mret;
+wire        UType, JType, BType, IType, SType, RType, IcsrType;
+wire        I_imm;
+wire        idu_ifu_handshake, idu_exu_handshake;
 
-  assign opcode = i_inst[ 6: 0];
-  assign   fun3 = i_inst[14:12];
-  assign   fun7 = i_inst[31:25];
+assign idu_ifu_handshake = ifu_idu_valid  && idu_ifu_ready;
+assign idu_exu_handshake = idu_exu_valid  && exu_idu_ready;
 
-  assign  rd = i_inst[11: 7];
-  assign rs1 = i_inst[19:15];
-  assign rs2 = i_inst[24:20];
+assign opcode = i_inst[ 6: 0];
+assign   fun3 = i_inst[14:12];
+assign   fun7 = i_inst[31:25];
+assign    rd  = i_inst[11: 7];
+assign   rs1  = i_inst[19:15];
+assign   rs2  = i_inst[24:20];
 
-  wire UType,JType,BType,IType,SType,RType,IcsrType;
-  assign ins_cnt = {UType,JType,BType,IType,SType,RType};
+assign auipc    = (opcode == 7'b0010111);
+assign lui      = (opcode == 7'b0110111);
+assign UType    = auipc | lui;
+assign JType    = (opcode == 7'b1101111);
+assign jal      = JType;
+assign jalr     = (opcode == 7'b1100111);
+assign load     = (opcode == 7'b0000011);
+assign I_imm    = (opcode == 7'b0010011);
+assign IType    = jalr | load | I_imm;
+assign BType    = (opcode == 7'b1100011);
+assign SType    = (opcode == 7'b0100011);
+assign RType    = (opcode == 7'b0110011);
+assign IcsrType = (opcode == 7'b1110011);
+assign ebreak   = (i_inst == 32'b00000000000100000000000001110011);
+assign ecall    = (i_inst == 32'b00000000000000000000000001110011);
+assign mret     = (i_inst == 32'b00110000001000000000000001110011);
 
-  // U Type
-  assign auipc  = ( opcode == 7'b0010111 );
-  assign lui    = ( opcode == 7'b0110111 );
-  assign UType  = ( auipc | lui );
-  // J Type
-  assign JType  = ( opcode == 7'b1101111 );           // jal
-  assign jal    = JType;
-  // I Type
-  assign jalr   = ( opcode == 7'b1100111 );
-  assign load   = ( opcode == 7'b0000011 );
-  wire   I_imm  = ( opcode == 7'b0010011 );
-  // jalr lb lh lw lbu lhu addi slti sltiu xori ori andi alli slli srli srai
-  assign IType  = ( jalr ) || ( load ) || ( I_imm );
-  // B Type
-  assign BType  = ( opcode == 7'b1100011 );           // beq bne blt bge blut bgeu
-  // S Type
-  assign SType  = ( opcode == 7'b0100011 );           // sb sh sw
-  // R Type
-  assign RType  = ( opcode == 7'b0110011 );           // add sub sll slt sltu xor srl sra or and
-  // ICSR Type
-  assign IcsrType = ( opcode == 7'b1110011);          // ecall ebreak csrrw csrrs
-  // others
-  wire ecall,mret;
-  assign ebreak = ( i_inst == 32'b00000000000100000000000001110011);
-  assign ecall  = ( i_inst == 32'b00000000000000000000000001110011);
-  assign mret   = ( i_inst == 32'b00110000001000000000000001110011);
+assign imm = ({32{JType}} & {{12{i_inst[31]}}, i_inst[19:12], i_inst[20], i_inst[30:21], 1'b0}) |
+             ({32{UType}} & {i_inst[31:12], 12'b0})                                              |
+             ({32{BType}} & {{19{i_inst[31]}}, i_inst[31], i_inst[7], i_inst[30:25], i_inst[11:8], 1'b0}) |
+             ({32{SType}} & {{20{i_inst[31]}}, i_inst[31:25], i_inst[11:7]})                     |
+             ({32{IType}} & {{20{i_inst[31]}}, i_inst[31:20]});
 
+assign csr_imm = IcsrType ? i_inst[31:20] : 12'b0;
 
-  assign imm = ({32{JType}} & {{12{i_inst[31]}},i_inst[19:12],i_inst[20],i_inst[30:21],1'b0})|
-               ({32{UType}} & {i_inst[31:12],{12{1'b0}}})                                    |
-               ({32{BType}} & {{20{i_inst[31]}},i_inst[7],i_inst[30:25],i_inst[11:8],1'b0})  |
-               ({32{SType}} & {{20{i_inst[31]}},i_inst[31:25],i_inst[11:7]})                 |
-               ({32{IType}} & {{20{i_inst[31]}},i_inst[31:20]} );
+wire [3:0] alu_cnt;
+assign alu_cnt = RType  ? ((fun3 == 3'b000) ? ((fun7 == 7'b0100000) ? 4'b0010 : 4'b0001) :
+                            (fun3 == 3'b010) ? 4'b0011 : (fun3 == 3'b011) ? 4'b0100 :
+                            (fun3 == 3'b111) ? 4'b0101 : (fun3 == 3'b110) ? 4'b0110 :
+                            (fun3 == 3'b100) ? 4'b0111 : (fun3 == 3'b001) ? 4'b1000 :
+                            (fun3 == 3'b101) ? ((fun7 == 7'b0100000) ? 4'b1010 : 4'b1001) : 4'b0000) :
+               I_imm   ? ((fun3 == 3'b000) ? 4'b0001 : (fun3 == 3'b010) ? 4'b0011 :
+                            (fun3 == 3'b011) ? 4'b0100 : (fun3 == 3'b111) ? 4'b0101 :
+                            (fun3 == 3'b110) ? 4'b0110 : (fun3 == 3'b100) ? 4'b0111 :
+                            (fun3 == 3'b001) ? 4'b1000 :
+                            (fun3 == 3'b101) ? ((fun7 == 7'b0100000) ? 4'b1010 : 4'b1001) : 4'b0000) :
+               (jalr | jal | auipc | lui) ? 4'b0001 :
+               IcsrType ? 4'b0001 :
+               4'b0000;
 
-  assign csr_cnt = IcsrType ? (( fun3 === 3'b001 ) ? 3'b001 :          // csrrw
-                               ( fun3 === 3'b010 ) ? 3'b010 :          // csrrs
-                               ( ebreak          ) ? 3'b011 :          // ebreak
-                               ( ecall           ) ? 3'b100 :          // ecall
-                               ( mret            ) ? 3'b101 : 3'b000 ):// mret
-                              3'b000;
+wire [3:0] pc_cnt;
+assign pc_cnt = BType ? ((fun3 == 3'b000) ? 4'b0001 : (fun3 == 3'b001) ? 4'b0010 :
+                          (fun3 == 3'b100) ? 4'b0011 : (fun3 == 3'b101) ? 4'b0100 :
+                          (fun3 == 3'b110) ? 4'b0101 : (fun3 == 3'b111) ? 4'b0110 : 4'b0000) :
+               jal   ? 4'b0111 :
+               jalr  ? 4'b1000 :
+               mret  ? 4'b1001 :
+               ecall ? 4'b1010 :
+               4'b0000;
 
-  assign csr_imm = IcsrType ? i_inst[31:20] : 0 ;
+wire [3:0] lsu_cnt;
+assign lsu_cnt = SType ? ((fun3 == 3'b000) ? 4'b0001 : (fun3 == 3'b001) ? 4'b0010 :
+                           (fun3 == 3'b010) ? 4'b0011 : 4'b0000) :
+                load  ? ((fun3 == 3'b000) ? 4'b0100 : (fun3 == 3'b001) ? 4'b0101 :
+                          (fun3 == 3'b010) ? 4'b0110 : (fun3 == 3'b100) ? 4'b0111 :
+                          (fun3 == 3'b101) ? 4'b1000 : 4'b0000) :
+                4'b0000;
 
-  assign pc_cnt = BType ? (( fun3 === 3'b000 ) ? 4'b0001 :          // beq
-                           ( fun3 === 3'b001 ) ? 4'b0010 :          // bne
-                           ( fun3 === 3'b100 ) ? 4'b0011 :          // blt
-                           ( fun3 === 3'b101 ) ? 4'b0100 :          // bge
-                           ( fun3 === 3'b110 ) ? 4'b0101 :          // bltu
-                           ( fun3 === 3'b111 ) ? 4'b0110 : 4'b0000):// bgeu
-                  JType ? 4'b0111 :
-                  jalr  ? 4'b1000 :
-                  mret  ? 4'b1001 :
-                  ecall ? 4'b1010 :
-                  4'b0000;
+wire [2:0] csr_cnt;
+assign csr_cnt = IcsrType ? ((fun3 == 3'b001) ? 3'b001 :
+                             (fun3 == 3'b010) ? 3'b010 :
+                             ebreak           ? 3'b011 :
+                             ecall            ? 3'b100 :
+                             mret             ? 3'b101 : 3'b000) : 3'b000;
 
-  assign lsu_cnt = SType ? (( fun3 === 3'b000 ) ? 4'b0001 :          // sb
-                            ( fun3 === 3'b001 ) ? 4'b0010 :          // sh
-                            ( fun3 === 3'b010 ) ? 4'b0011 : 4'b0000):// sw
-                   load  ? (( fun3 === 3'b000 ) ? 4'b0100 :          // lb
-                            ( fun3 === 3'b001 ) ? 4'b0101 :          // lh
-                            ( fun3 === 3'b010 ) ? 4'b0110 :          // lw
-                            ( fun3 === 3'b100 ) ? 4'b0111 :          // lbu
-                            ( fun3 === 3'b101 ) ? 4'b1000 : 4'b0000):// lhu
-                   4'b0000;
+wire [5:0] ins_cnt;
+assign ins_cnt = {UType, JType, BType, IType, SType, RType};
 
-  assign wbu_cnt = UType | JType | IType | RType | ( csr_cnt === 3'b001) | ( csr_cnt === 3'b010 );
-                                // + (add) / - (sub)
-  assign alu_cnt = ( RType ) ? (( fun3 === 3'b000 ) ? ((fun7 === 7'b0000000 ) ? 4'b0001 : 4'b0010):
-                                ( fun3 === 3'b010 ) ? 4'b0011 : // sign< (slt)
-                                ( fun3 === 3'b011 ) ? 4'b0100 : // unsign< (sltu)
-                                ( fun3 === 3'b111 ) ? 4'b0101 : // & (and)
-                                ( fun3 === 3'b110 ) ? 4'b0110 : // | (or)
-                                ( fun3 === 3'b100 ) ? 4'b0111 : // ^ (xor)
-                                ( fun3 === 3'b001 ) ? 4'b1000 : // <<0 (sll)
-                                ( fun3 === 3'b101 ) ?
-                                // 0>> (srl) / sign>> (sra)
-                                ((fun7 === 7'b0000000 ) ? 4'b1001 : 4'b1010): 4'b0000):
-                   ( I_imm ) ? (( fun3 === 3'b000 ) ? 4'b0001 : // + (addi)
-                                ( fun3 === 3'b010 ) ? 4'b0011 : // sign< (slti)
-                                ( fun3 === 3'b011 ) ? 4'b0100 : // unsign< (sltiu)
-                                ( fun3 === 3'b111 ) ? 4'b0101 : // & (andi)
-                                ( fun3 === 3'b110 ) ? 4'b0110 : // | (ori)
-                                ( fun3 === 3'b100 ) ? 4'b0111 : // ^ (xori)
-                                ( fun3 === 3'b001 ) ? 4'b1000 : // <<0 (slli)
-                                ( fun3 === 3'b101 ) ?
-                                // 0>> (srli) / sign>> (srai)
-                                ((fun7 === 7'b0000000 ) ? 4'b1001 : 4'b1010): 4'b0000):
-                   ( jalr ) ?    4'b0001 :
-                   ( jal  ) ?    4'b0001 :
-                   ( auipc) ?    4'b0001 :
-                   ( lui  ) ?    4'b0001 :
-                   ( IcsrType ) ? (( fun3 === 3'b010 ) ? 4'b0001 :            // csrrs
-                                   ( fun3 === 3'b001 ) ? 4'b0001 : 4'b0000) : // csrrw
-                   4'b0000;
+wire wbu_cnt;
+assign wbu_cnt = UType | JType | IType | RType | (csr_cnt == 3'b001) | (csr_cnt == 3'b010);
 
-  localparam logic IDLE = 1'b0;
-  localparam logic DECODE = 1'b1;
-  reg cstate, nstate;
+// 握手：只要 IDU 没有待发送给 EXU 的数据，就可以接收 IFU 的数据
+always_ff @(posedge clock) begin
+  if (reset) begin
+    idu_ifu_ready <= 1'b1;
+  end else begin
+    if (i_br_taken)
+      idu_ifu_ready <= 1'b1;
+    else if (idu_exu_handshake)
+      idu_ifu_ready <= 1'b1;
+    else if (idu_ifu_handshake)
+      idu_ifu_ready <= 1'b0;
+  end
+end
 
-  assign idu_ifu_ready = (cstate == IDLE) ;
-  assign idu_exu_valid = (cstate == DECODE);
-
-  always_ff @(posedge clock) begin
-    if(reset) begin
-      cstate <= IDLE;
-    end else begin
-      cstate <= nstate;
+// 流水线寄存器：锁存译码结果
+always_ff @(posedge clock) begin
+  if (reset) begin
+    idu_exu_valid <= 1'b0;
+    o_pc          <= 32'h80000000;
+    o_rs1         <= 5'b0;
+    o_rs2         <= 5'b0;
+    o_rd          <= 5'b0;
+    o_imm         <= 32'b0;
+    o_csr_imm     <= 12'b0;
+    o_alu_cnt     <= 4'b0;
+    o_pc_cnt      <= 4'b0;
+    o_lsu_cnt     <= 4'b0;
+    o_csr_cnt     <= 3'b0;
+    o_ins_cnt     <= 6'b0;
+    o_wbu_cnt     <= 1'b0;
+    o_lui         <= 1'b0;
+    o_auipc       <= 1'b0;
+    o_jal         <= 1'b0;
+    o_jalr        <= 1'b0;
+  end else begin
+    if (i_br_taken) begin
+      // 跳转：丢弃 IDU 中已译码但未送出的指令
+      idu_exu_valid <= 1'b0;
+    end else if (idu_ifu_handshake) begin
+      idu_exu_valid <= 1'b1;
+      o_pc          <= i_pc;
+      o_rs1         <= rs1;
+      o_rs2         <= rs2;
+      o_rd          <= rd;
+      o_imm         <= imm;
+      o_csr_imm     <= csr_imm;
+      o_alu_cnt     <= alu_cnt;
+      o_pc_cnt      <= pc_cnt;
+      o_lsu_cnt     <= lsu_cnt;
+      o_csr_cnt     <= csr_cnt;
+      o_ins_cnt     <= ins_cnt;
+      o_wbu_cnt     <= wbu_cnt;
+      o_lui         <= lui;
+      o_auipc       <= auipc;
+      o_jal         <= jal;
+      o_jalr        <= jalr;
+    end else if (idu_exu_handshake) begin
+      idu_exu_valid <= 1'b0;
     end
   end
-  // fix here
-  always_comb begin
-    case (cstate)
-      IDLE : begin
-        if(ifu_idu_valid && !o_ControlHazard) begin
-          nstate = DECODE;
-        end else begin
-          nstate = IDLE;
-        end
-      end
-      DECODE : begin
-      if ( o_ControlHazard ) begin
-        nstate = IDLE;
-      end else if (exu_idu_ready) begin
-          nstate = IDLE;
-        end else begin
-          nstate = DECODE;
-        end
-      end
-      default: begin
-        nstate = IDLE;
-      end
-    endcase
-  end
-
-  always_ff @(posedge clock) begin
-    if(reset) begin
-      o_ControlHazard <= 1'b0;
-      o_pc      <= 32'h80000000;
-      o_pc_cnt  <= 4'b0;
-      o_lsu_cnt <= 4'b0;
-      o_wbu_cnt <= 1'b0;
-      o_alu_cnt <= 4'b0;
-      o_ins_cnt <= 6'b0;
-      o_csr_cnt <= 3'b0;
-      o_rs1     <= 5'b0;
-      o_rs2     <= 5'b0;
-      o_rd      <= 5'b0;
-      o_imm     <= 32'b0;
-      o_csr_imm <= 12'b0;
-      o_auipc   <= 1'b0;
-      o_lui     <= 1'b0;
-      o_ebreak  <= 1'b0;
-      o_load    <= 1'b0;
-      o_jal     <= 1'b0;
-      o_jalr    <= 1'b0;
-    end else begin
-      unique case (cstate)
-        IDLE : begin
-          if(ifu_idu_valid) begin
-            o_ControlHazard <= (pc_cnt != 4'b0000) ;
-            o_pc      <= i_pc;
-            o_pc_cnt  <= pc_cnt;
-            o_lsu_cnt <= lsu_cnt;
-            o_wbu_cnt <= wbu_cnt;
-            o_alu_cnt <= alu_cnt;
-            o_ins_cnt <= ins_cnt;
-            o_csr_cnt <= csr_cnt;
-            o_rs1     <= rs1;
-            o_rs2     <= rs2;
-            o_rd      <= (ecall || ebreak || SType || BType) ? 0 : rd;
-            o_imm     <= imm;
-            o_csr_imm <= csr_imm;
-            o_auipc   <= auipc;
-            o_lui     <= lui;
-            o_ebreak  <= ebreak;
-            o_load    <= load;
-            o_jal     <= jal;
-            o_jalr    <= jalr;
-          end
-        end
-        DECODE : begin
-          o_ControlHazard <= 1'b0;
-          if(exu_idu_ready) begin
-            o_pc      <= o_pc;
-            o_pc_cnt  <= 4'b0;
-            o_lsu_cnt <= 4'b0;
-            o_wbu_cnt <= 1'b0;
-            o_alu_cnt <= 4'b0;
-            o_ins_cnt <= 6'b0;
-            o_csr_cnt <= 3'b0;
-            o_rs1     <= 5'b0;
-            o_rs2     <= 5'b0;
-            o_rd      <= 5'b0;
-            o_imm     <= 32'b0;
-            o_csr_imm <= 12'b0;
-            o_auipc   <= 1'b0;
-            o_lui     <= 1'b0;
-            o_ebreak  <= 1'b0;
-            o_load    <= 1'b0;
-            o_jal     <= 1'b0;
-            o_jalr    <= 1'b0;
-          end else begin
-          end
-        end
-      endcase
-    end
-  end
+end
 
 endmodule
-
 
 module ysyx_24080018_EXU(
-  input             clock,
-  input             reset,
+  input wire        clock,
+  input wire        reset,
 
-  input             idu_exu_valid,
-  output            exu_idu_ready,
-  output            exu_mem_valid,
-  input             mem_exu_ready,
-  output            exu_csr_valid,
-  input             csr_exu_ready,
+  input wire        idu_exu_valid,
+  output reg        exu_idu_ready,
+  output reg        exu_lsu_valid,
+  input wire        lsu_exu_ready,
 
-  input             i_ebreak,
-  input  [31:0]     i_rdata1,
-  input  [31:0]     i_rdata2,
-  input  [GPR_WIDTH-1:0]     i_waddr,
-  input  [ 5:0]     i_ins_cnt,
-  input  [PC_WIDTH-1:0]     i_pc,
-  input  [ 3:0]     i_pc_cnt,
-  input  [ 3:0]     i_alu_cnt,
-  input  [ 2:0]     i_csr_cnt,
-  input             i_auipc,
-  input             i_lui,
-  input             i_jalr,
-  input             i_load,
-  input             i_jal,
-  input  [31:0]     i_imm,
-  input  [31:0]     i_csr_data,
-  input  [ 3:0]     i_lsu_cnt,
-  input             i_wbu_cnt,
-  input  [GPR_WIDTH-1:0]     i_raddr1,
-  input  [GPR_WIDTH-1:0]     i_raddr2,
-  input  [GPR_WIDTH-1:0]     i_bypass_waddr,
-  input  [31:0]     i_bypass_wdata,
+  input wire        i_auipc,
+  input wire        i_lui,
+  input wire        i_jal,
+  input wire        i_jalr,
+
+  input wire [31:0] i_pc,
+  output reg [31:0] o_pc,
+  input wire [31:0] i_imm,
+  input wire [31:0] i_rdata1,
+  input wire [31:0] i_rdata2,
+  input wire [ 4:0] i_waddr,
+  input wire [ 4:0] i_rs1,
+  input wire [ 4:0] i_rs2,
+  output reg [ 4:0] o_waddr,
+  output reg [31:0] o_alu_result,
+  output reg        o_br_taken,
+  output wire[31:0] o_br_target,
+
+  input wire [ 5:0] i_ins_cnt,
+  input wire [ 3:0] i_pc_cnt,
+  input wire [ 3:0] i_alu_cnt,
+  input wire [ 2:0] i_csr_cnt,
+  input wire [ 3:0] i_lsu_cnt,
+  input wire        i_wbu_cnt,
   output reg        o_wbu_cnt,
-  output reg        o_ebreak,
   output reg [ 2:0] o_csr_cnt,
   output reg [ 3:0] o_lsu_cnt,
-  output reg [GPR_WIDTH-1:0] o_waddr,
-  output reg [31:0] o_data_store,
-  output reg [31:0] o_addr_lsu,
-  output reg [PC_WIDTH-1:0] o_pc ,
-  output reg [31:0] o_alu_result,
-  output            o_br_taken
+
+  output reg [31:0] o_lsu_wdata,
+  output reg [31:0] o_lsu_waddr,
+  output reg [31:0] o_lsu_raddr,
+  output reg [ 4:0] o_raddr1,
+  output reg [ 4:0] o_raddr2,
+
+  input wire [ 4:0] i_fwd_exu_waddr,
+  input wire [31:0] i_fwd_exu_wdata,
+  input wire        i_fwd_exu_wen,
+  input wire [ 4:0] i_fwd_lsu_waddr,
+  input wire [31:0] i_fwd_lsu_wdata,
+  input wire        i_fwd_lsu_wen
 );
 
-  localparam logic IDLE = 1'b0;
-  localparam logic WAIT = 1'b1;
-  reg cstate, nstate;
+wire exu_lsu_handshake, idu_exu_handshake;
+assign idu_exu_handshake = idu_exu_valid && exu_idu_ready;
+assign exu_lsu_handshake = exu_lsu_valid && lsu_exu_ready;
 
-  wire UType,JType,BType,IType,SType,RType;
-  assign {UType,JType,BType,IType,SType,RType} = i_ins_cnt;
+wire UType, JType, BType, IType, SType, RType;
+assign {UType,JType,BType,IType,SType,RType} = i_ins_cnt;
 
-  wire  [31:0]  _alu_result;
+// Forwarding 选择：EXU阶段 > LSU阶段 > WBU传来的值
+wire fwd_exu_rs1 = i_fwd_exu_wen && (i_fwd_exu_waddr != 5'b0) && (i_fwd_exu_waddr == i_rs1);
+wire fwd_lsu_rs1 = i_fwd_lsu_wen && (i_fwd_lsu_waddr != 5'b0) && (i_fwd_lsu_waddr == i_rs1);
+wire fwd_exu_rs2 = i_fwd_exu_wen && (i_fwd_exu_waddr != 5'b0) && (i_fwd_exu_waddr == i_rs2);
+wire fwd_lsu_rs2 = i_fwd_lsu_wen && (i_fwd_lsu_waddr != 5'b0) && (i_fwd_lsu_waddr == i_rs2);
 
-  assign exu_mem_valid = cstate === WAIT && (i_csr_cnt === 3'b0);
-  assign exu_csr_valid = cstate === WAIT && (i_csr_cnt != 3'b0);
+wire [31:0] fwd_rdata1 = fwd_exu_rs1 ? i_fwd_exu_wdata :
+                         fwd_lsu_rs1 ? i_fwd_lsu_wdata :
+                         i_rdata1;
+wire [31:0] fwd_rdata2 = fwd_exu_rs2 ? i_fwd_exu_wdata :
+                         fwd_lsu_rs2 ? i_fwd_lsu_wdata :
+                         i_rdata2;
 
-  assign exu_idu_ready = (cstate == IDLE);
+wire [31:0] alu_a,alu_b;
+assign alu_a = (i_lui                    ) ? 32'b0      :
+               (i_jalr | i_auipc | i_jal ) ? i_pc       :
+               fwd_rdata1;
 
-  always @(posedge clock) begin
-    if(reset) begin
-      cstate <= IDLE;
-    end else begin
-      cstate <= nstate;
+assign alu_b = (  i_jal | i_jalr         ) ? 32'd4      :
+               (  UType | JType | IType  ) ? i_imm      :
+               (  RType | SType | BType  ) ? fwd_rdata2 :
+               32'b0;
+
+wire _br_taken;
+assign _br_taken = ( i_pc_cnt == 4'b0001 ) ? ($signed(fwd_rdata1) == $signed(fwd_rdata2)) :
+                   ( i_pc_cnt == 4'b0010 ) ? ($signed(fwd_rdata1) != $signed(fwd_rdata2)) :
+                   ( i_pc_cnt == 4'b0011 ) ? ($signed(fwd_rdata1) <  $signed(fwd_rdata2)) :
+                   ( i_pc_cnt == 4'b0100 ) ? ($signed(fwd_rdata1) >= $signed(fwd_rdata2)) :
+                   ( i_pc_cnt == 4'b0101 ) ? (        fwd_rdata1  <          fwd_rdata2 ) :
+                   ( i_pc_cnt == 4'b0110 ) ? (        fwd_rdata1  >=         fwd_rdata2 ) :
+                   ( i_pc_cnt == 4'b0111 ) ? 1'b1 : // jal
+                   ( i_pc_cnt == 4'b1000 ) ? 1'b1 : // jalr
+                   1'b0;
+
+assign o_br_target = (i_pc_cnt == 4'b1000) ? ((fwd_rdata1 + i_imm) & ~32'h1) : // jalr
+                        (i_pc + i_imm);                                            // jal / branch
+
+wire  [63:0]  shift_temp ;
+assign shift_temp = ({{32{alu_a[31]}}, alu_a} >>  alu_b[4:0]);
+
+wire  [31:0]  _alu_result;
+                     // + (add/addi/jalr)
+assign _alu_result = ( i_alu_cnt === 4'b0001 ) ? (         alu_a  +        alu_b ):
+                     // - (sub)
+                     ( i_alu_cnt === 4'b0010 ) ? (         alu_a  -        alu_b ):
+                     // sign< (slt/slti)
+                     ( i_alu_cnt === 4'b0011 ) ? (($signed(alu_a) <$signed(alu_b))? 32'd1:32'd0 ):
+                     // unsign< (sltu/sltiu)
+                     ( i_alu_cnt === 4'b0100 ) ? ((        alu_a  <        alu_b )? 32'd1:32'd0 ):
+                     // & (and/andi)
+                     ( i_alu_cnt === 4'b0101 ) ? (         alu_a  &        alu_b ):
+                     // | (or/ori)
+                     ( i_alu_cnt === 4'b0110 ) ? (         alu_a  |        alu_b ):
+                     // ^ (xor/xori)
+                     ( i_alu_cnt === 4'b0111 ) ? (         alu_a  ^        alu_b ):
+                     // <<0 (sll/slli)
+                     ( i_alu_cnt === 4'b1000 ) ? (         alu_a <<    alu_b[4:0]):
+                     // 0>> (srl/srli)
+                     ( i_alu_cnt === 4'b1001 ) ? (         alu_a >>    alu_b[4:0]):
+                     // sign>> (sra/srai)
+                     ( i_alu_cnt === 4'b1010 ) ? ( shift_temp[31:0] ):
+                     32'b0;
+
+reg _br_taken_r;
+always_ff @(posedge clock) begin
+  if (reset) _br_taken_r <= 1'b0;
+  else if (idu_exu_handshake) _br_taken_r <= _br_taken;
+  else if (exu_lsu_handshake) _br_taken_r <= 1'b0;
+end
+
+// EXU 握手状态机：exu_idu_ready 表示 EXU 可以接收新指令
+always_ff @(posedge clock) begin
+  if (reset) begin
+    exu_idu_ready <= 1'b1;
+  end else begin
+    if (exu_lsu_handshake)
+      exu_idu_ready <= 1'b1;
+    else if (idu_exu_handshake)
+      exu_idu_ready <= 1'b0;
+  end
+end
+
+// 流水线寄存器：锁存 EXU 计算结果传给 LSU
+always_ff @(posedge clock) begin
+  if (reset) begin
+    exu_lsu_valid <= 1'b0;
+    o_pc          <= 32'h80000000;
+    o_waddr       <= 5'b0;
+    o_alu_result  <= 32'b0;
+    o_br_taken    <= 1'b0;
+    o_wbu_cnt     <= 1'b0;
+    o_csr_cnt     <= 3'b0;
+    o_lsu_cnt     <= 4'b0;
+    o_lsu_wdata   <= 32'b0;
+    o_lsu_waddr   <= 32'b0;
+    o_lsu_raddr   <= 32'b0;
+    o_raddr1      <= 5'b0;
+    o_raddr2      <= 5'b0;
+  end else begin
+    // o_br_taken 只脉冲一拍，下一拍立即清零
+    o_br_taken <= 1'b0;
+    if (idu_exu_handshake) begin
+      exu_lsu_valid <= 1'b1;
+      o_pc          <= i_pc;
+      o_waddr       <= i_waddr;
+      o_alu_result  <= _alu_result;
+      o_wbu_cnt     <= i_wbu_cnt;
+      o_csr_cnt     <= i_csr_cnt;
+      o_lsu_cnt     <= i_lsu_cnt;
+      // store: waddr = rs1 + imm, wdata = rs2
+      o_lsu_waddr   <= fwd_rdata1 + i_imm;
+      o_lsu_wdata   <= fwd_rdata2;
+      // load: raddr = rs1 + imm
+      o_lsu_raddr   <= fwd_rdata1 + i_imm;
+      o_raddr1      <= i_rs1;
+      o_raddr2      <= i_rs2;
+      o_br_taken    <= i_jal ? _br_taken : 1'b0;
+    end else if (exu_lsu_handshake) begin
+      exu_lsu_valid <= 1'b0;
+      o_br_taken    <= i_jalr ? _br_taken_r: 1'b0;
     end
   end
-
-  always_comb begin
-    case (cstate)
-      IDLE : begin
-        if(idu_exu_valid) begin
-          nstate = WAIT;
-        end else begin
-          nstate = IDLE;
-        end
-      end
-      WAIT : begin
-        if(i_load || SType) begin
-          if(mem_exu_ready) begin
-            nstate = IDLE;
-          end else begin
-            nstate = WAIT;
-          end
-      end else if(i_csr_cnt != 3'b000) begin
-        if(csr_exu_ready) begin
-          nstate = IDLE;
-        end else begin
-          nstate = WAIT;
-        end
-      end else begin
-        nstate = IDLE;
-      end
-    end
-    default: begin
-      nstate = IDLE;
-    end
-  endcase
-  end
-
-  always_ff @(posedge clock) begin
-      if(reset) begin
-          o_pc    <= 32'h80000000;
-          o_waddr <= 5'b0;
-          o_lsu_cnt    <= '0;
-          o_data_store <= '0;
-          o_addr_lsu   <= '0;
-          o_alu_result <= '0;
-          o_ebreak     <= '0;
-          o_csr_cnt    <= '0;
-          o_wbu_cnt    <= '0;
-      end else begin
-          o_pc         <= o_pc;
-          o_lsu_cnt    <= o_lsu_cnt;
-          o_waddr      <= o_waddr;
-          o_data_store <= o_data_store;
-          o_addr_lsu   <= o_addr_lsu;
-          o_alu_result <= o_alu_result;
-          o_ebreak     <= o_ebreak;
-          o_csr_cnt    <= o_csr_cnt;
-          o_wbu_cnt    <= o_wbu_cnt;
-          unique case (cstate)
-              IDLE : begin
-                  if(idu_exu_valid) begin
-                      o_pc         <= i_pc ;
-                      o_lsu_cnt    <= i_lsu_cnt;
-                      o_waddr      <= i_waddr;
-                      o_data_store <= ((i_bypass_waddr != 0) && (i_bypass_waddr == i_raddr2)) ?
-                                      i_bypass_wdata : i_rdata2 ;
-                      o_addr_lsu   <= ((i_bypass_waddr != 0) && (i_bypass_waddr == i_raddr1)) ?
-                                      i_bypass_wdata + i_imm : i_rdata1 + i_imm;
-                      o_alu_result <= _alu_result;
-                      o_ebreak     <= i_ebreak;
-                      o_csr_cnt    <= i_csr_cnt;
-                      o_wbu_cnt    <= i_wbu_cnt;
-                  end
-              end
-              WAIT : begin
-              end
-          endcase
-      end
-  end
-
-  wire [31:0] alu_a,alu_b;
-
-  assign alu_a = (i_jalr ) ? i_pc   :
-                 ((RType | IType | SType | BType) && (i_bypass_waddr == i_raddr1)
-                 && (i_bypass_waddr != 0)) ? i_bypass_wdata : // RAW
-                 (i_auipc) ? i_pc   :
-                 (i_lui  ) ? 32'b0  :
-                 (i_jal  ) ? i_pc   :
-                 (i_csr_cnt === 3'b010 ) ? i_csr_data :
-                 (i_csr_cnt === 3'b001 ) ? i_csr_data :
-                 i_rdata1;
-
-  assign alu_b = ( (RType | SType | BType) && (i_bypass_waddr == i_raddr2)
-                 && (i_bypass_waddr != 0)) ? i_bypass_wdata : // RAW
-                 ( i_jal   ) ? 32'd4 :
-                 ( i_jalr  ) ? 32'd4 :
-                 ( UType | JType | IType ) ? i_imm :
-                 ( RType | SType | BType ) ? i_rdata2 : 32'b0;
-
-  wire _br_taken;
-  assign _br_taken = ( i_pc_cnt == 4'b0001 ) ? ($signed(alu_a) == $signed(alu_b)) :
-                     ( i_pc_cnt == 4'b0010 ) ? ($signed(alu_a) != $signed(alu_b)) :
-                     ( i_pc_cnt == 4'b0011 ) ? ($signed(alu_a) <  $signed(alu_b)) :
-                     ( i_pc_cnt == 4'b0100 ) ? ($signed(alu_a) >= $signed(alu_b)) :
-                     ( i_pc_cnt == 4'b0101 ) ? (        alu_a  <          alu_b ) :
-                     ( i_pc_cnt == 4'b0110 ) ? (        alu_a  >=         alu_b ) :
-                     1'b0;
-  assign o_br_taken = _br_taken;
-
-  wire  [63:0]  shift_temp ;
-  assign shift_temp = ({{32{alu_a[31]}}, alu_a} >>  alu_b[4:0]);
-                       // + (add/addi/jalr)
-  assign _alu_result = ( i_alu_cnt === 4'b0001 ) ? (         alu_a  +        alu_b ):
-                       // - (sub)
-                       ( i_alu_cnt === 4'b0010 ) ? (         alu_a  -        alu_b ):
-                       // sign< (slt/slti)
-                       ( i_alu_cnt === 4'b0011 ) ? (($signed(alu_a) <$signed(alu_b))? 32'd1:32'd0 ):
-                       // unsign< (sltu/sltiu)
-                       ( i_alu_cnt === 4'b0100 ) ? ((        alu_a  <        alu_b )? 32'd1:32'd0 ):
-                       // & (and/andi)
-                       ( i_alu_cnt === 4'b0101 ) ? (         alu_a  &        alu_b ):
-                       // | (or/ori)
-                       ( i_alu_cnt === 4'b0110 ) ? (         alu_a  |        alu_b ):
-                       // ^ (xor/xori)
-                       ( i_alu_cnt === 4'b0111 ) ? (         alu_a  ^        alu_b ):
-                       // <<0 (sll/slli)
-                       ( i_alu_cnt === 4'b1000 ) ? (         alu_a <<    alu_b[4:0]):
-                       // 0>> (srl/srli)
-                       ( i_alu_cnt === 4'b1001 ) ? (         alu_a >>    alu_b[4:0]):
-                       // sign>> (sra/srai)
-                       ( i_alu_cnt === 4'b1010 ) ? ( shift_temp[31:0] ):
-                       32'b0;
+end
 
 endmodule
 
-module ysyx_24080018_LSU (
-  input             clock,
-  input             reset,
+module ysyx_24080018_LSU(
+  input wire        clock,
+  input wire        reset,
 
-  input             exu_mem_valid,
-  output            mem_exu_ready,
-  output            mem_wbu_valid,
-  input             wbu_mem_ready,
+  input wire        exu_lsu_valid,
+  output reg        lsu_exu_ready,
+  output reg        lsu_wbu_valid,
+  input wire        wbu_lsu_ready,
 
+  input wire [ 4:0] i_raddr1,
+  input wire [ 4:0] i_raddr2,
+  input wire [ 4:0] i_waddr,
+  input wire [31:0] i_wdata,
+  input wire [31:0] i_pc,
+  input wire        i_wbu_cnt,
+  input wire [ 3:0] i_lsu_cnt,
+  input wire [31:0] i_lsu_wdata,
+  input wire [31:0] i_lsu_waddr,
+  input wire [31:0] i_lsu_raddr,
+
+  output reg [ 4:0] o_raddr1,
+  output reg [ 4:0] o_raddr2,
+  output reg [ 4:0] o_waddr,
   output reg [31:0] o_wdata,
-  output reg [GPR_WIDTH-1:0] o_waddr,
+  output reg [31:0] o_pc,
   output reg        o_wbu_cnt,
-  output reg        o_ebreak,
-  output reg [PC_WIDTH-1:0] o_pc,
-  input      [PC_WIDTH-1:0] i_pc,
-  input             i_ebreak,
-  input             i_wbu_cnt,
-  input      [GPR_WIDTH-1:0] i_waddr,
-  input      [31:0] i_wdata,
-  input      [ 3:0] i_lsu_cnt,
-  input      [31:0] i_lsu_wdata,
-  input      [31:0] i_lsu_addr,
 
-  output     [31:0] o_lsu_awaddr ,// tochange
-  output            o_lsu_awvalid,// ok
-  input             i_lsu_awready,// ok
+  output reg [31:0] o_lsu_awaddr ,
+  output reg        o_lsu_awvalid,
+  input wire        i_lsu_awready,
 
-  output     [31:0] o_lsu_araddr ,// tochange
-  output            o_lsu_arvalid,// ok
-  input             i_lsu_arready,// ok
+  output reg [31:0] o_lsu_araddr ,
+  output reg        o_lsu_arvalid,
+  input wire        i_lsu_arready,
 
-  input      [31:0] i_lsu_rdata  ,// ok
-  input      [ 1:0] i_lsu_rresp  ,// ok
-  input             i_lsu_rvalid ,// ok
-  output            o_lsu_rready ,// ok
+  input wire [31:0] i_lsu_rdata  ,
+  input wire [ 1:0] i_lsu_rresp  ,
+  input wire        i_lsu_rvalid ,
+  output reg        o_lsu_rready ,
 
-  output     [31:0] o_lsu_wdata  ,// ok
-  output     [ 3:0] o_lsu_wstrb  ,// ok
-  output            o_lsu_wvalid ,// ok
-  input             i_lsu_wready ,// ok
+  output reg [31:0] o_lsu_wdata  ,
+  output reg [ 3:0] o_lsu_wstrb  ,
+  output reg        o_lsu_wvalid ,
+  input wire        i_lsu_wready ,
 
-  input      [ 1:0] i_lsu_bresp  ,// ok
-  input             i_lsu_bvalid ,// ok
-  output            o_lsu_bready  // ok
+  input wire [ 1:0] i_lsu_bresp  ,
+  input wire        i_lsu_bvalid ,
+  output reg        o_lsu_bready
 
-//  output             o_lsu_reqValid,
-//  output      [31:0] o_lsu_addr,
-//  output      [ 1:0] o_lsu_size,
-//  output             o_lsu_wen,
-//  output      [31:0] o_lsu_wdata,
-//  output      [ 3:0] o_lsu_wmask,
-//  input              i_lsu_respValid,
-//  input       [31:0] i_lsu_rdata
 );
 
-  localparam logic IDLE  = 1'b0;
-  localparam logic WAIT  = 1'b1;
-  reg cstate, nstate;
-  wire [31:0] temp;
-  wire [31:0] lsu_rdata;
-  wire [ 1:0] o_lsu_size;
-  wire        o_lsu_wen;
+wire lsu_wbu_handshake, exu_lsu_handshake;
+assign lsu_wbu_handshake = lsu_wbu_valid && wbu_lsu_ready;
+assign exu_lsu_handshake = exu_lsu_valid && lsu_exu_ready;
 
-  wire load,store;
+// 判断是否为 store/load 操作
+wire is_store = (i_lsu_cnt >= 4'b0001) && (i_lsu_cnt <= 4'b0011);
+wire is_load  = (i_lsu_cnt >= 4'b0100) && (i_lsu_cnt <= 4'b1000);
+wire is_mem   = is_store | is_load;
 
-  assign load  = (i_lsu_cnt === 4'b0100) || (i_lsu_cnt === 4'b0101) || (i_lsu_cnt === 4'b0110)
-                                         || (i_lsu_cnt === 4'b0111) || (i_lsu_cnt === 4'b1000);
-  assign store = (i_lsu_cnt === 4'b0001) || (i_lsu_cnt === 4'b0010) || (i_lsu_cnt === 4'b0011);
+// 锁存来自 EXU 的操作信息（等待 AXI 完成期间保持稳定）
+reg [31:0] latched_addr;
+reg [ 3:0] latched_lsu_cnt;
+reg [31:0] latched_wdata;
 
-  assign mem_exu_ready = cstate === IDLE;
-  assign mem_wbu_valid = (load || store) ?
-                         (cstate === WAIT) && (i_lsu_wready || i_lsu_rvalid) : cstate == WAIT;
+// 读回的数据
+reg [31:0] temp;
 
-  wire shakehand;
-  assign shakehand = !reset && exu_mem_valid && mem_exu_ready;
-  assign o_lsu_awvalid  = shakehand && store;
-  assign o_lsu_arvalid  = shakehand && load ;
-  assign o_lsu_wvalid   = (cstate == IDLE);
-  assign o_lsu_rready   = (cstate == IDLE);
-  assign o_lsu_bready   = (cstate == IDLE);
+// 用于 byte/half 选择的地址来自锁存地址
+wire [31:0] i_lsu_addr = latched_addr;
 
-  assign o_lsu_araddr   = i_lsu_addr;
-  assign o_lsu_awaddr   = i_lsu_addr;
-  assign o_lsu_wdata    = i_lsu_wdata << i_lsu_addr[1:0]*8;
-  assign o_lsu_wen      = store;
-  assign o_lsu_size     = (i_lsu_cnt == 4'b0001) ? 2'b00 : // sb
-                          (i_lsu_cnt == 4'b0010) ? 2'b01 : // sh
-                          (i_lsu_cnt == 4'b0011) ? 2'b10 : // sw
-                          (i_lsu_cnt == 4'b0100) ? 2'b00 : // lb
-                          (i_lsu_cnt == 4'b0101) ? 2'b01 : // lh
-                          (i_lsu_cnt == 4'b0110) ? 2'b10 : // lw
-                          (i_lsu_cnt == 4'b0111) ? 2'b00 : // lbu
-                          (i_lsu_cnt == 4'b1000) ? 2'b01 : // lhu
-                          2'b0;
+wire [3:0] wmask_half, wmask_byte;
+assign wmask_half  = (latched_addr[1]   == 1'b0) ? 4'h3 : 4'hc;
+assign wmask_byte  = (latched_addr[1:0] == 2'd0) ? 4'h1 :
+                     (latched_addr[1:0] == 2'd1) ? 4'h2 :
+                     (latched_addr[1:0] == 2'd2) ? 4'h4 :
+                     (latched_addr[1:0] == 2'd3) ? 4'h8 :
+                     4'h0;
+assign o_lsu_wstrb = (latched_lsu_cnt == 4'b0001) ? wmask_byte : // sb
+                     (latched_lsu_cnt == 4'b0010) ? wmask_half : // sh
+                     (latched_lsu_cnt == 4'b0011) ? 4'hf       : // sw
+                     4'd0;
 
-  wire [3:0] wmask_half,wmask_byte;
-  assign wmask_half  = (i_lsu_addr[1]   == 1'b0) ? 4'h3 : 4'hc ;
-  assign wmask_byte  =  (i_lsu_addr[1:0] == 2'd0) ? 4'h1 :
-                        (i_lsu_addr[1:0] == 2'd1) ? 4'h2 :
-                        (i_lsu_addr[1:0] == 2'd2) ? 4'h4 :
-                        (i_lsu_addr[1:0] == 2'd3) ? 4'h8 :
-                        4'h0;
-  assign o_lsu_wstrb =  (i_lsu_cnt == 4'b0001) ? wmask_byte : // sb
-                        (i_lsu_cnt == 4'b0010) ? wmask_half : // sh
-                        (i_lsu_cnt == 4'b0011) ? 4'hf       : // sw
-                        4'd0;
+reg [7:0] byte_sel;
+always_comb begin
+  unique case (i_lsu_addr[1:0])
+    2'b00 : byte_sel = temp[ 7: 0];
+    2'b01 : byte_sel = temp[15: 8];
+    2'b10 : byte_sel = temp[23:16];
+    2'b11 : byte_sel = temp[31:24];
+  endcase
+end
 
-  always_ff @(posedge clock) begin
-    if(reset) begin
-      cstate <= IDLE;
-    end else begin
-      cstate <= nstate;
-    end
-  end
+reg [15:0] half_sel;
+always_comb begin
+  unique case (i_lsu_addr[1])
+    1'b0 : half_sel = temp[15: 0];
+    1'b1 : half_sel = temp[31:16];
+  endcase
+end
 
-  always_comb begin
-      nstate = cstate;
-      case (cstate)
-        IDLE : begin
-          if((i_lsu_cnt === 4'b0) && exu_mem_valid) begin
-            nstate = WAIT;
-          end else if (load && exu_mem_valid) begin
-            nstate = WAIT;
-          end else if (store && exu_mem_valid) begin
-            nstate = WAIT;
+wire [31:0] lsu_rdata;
+assign lsu_rdata = (latched_lsu_cnt == 4'b0100) ? {{24{byte_sel[ 7]}}, byte_sel} : // lb
+                   (latched_lsu_cnt == 4'b0101) ? {{16{half_sel[15]}}, half_sel} : // lh
+                   (latched_lsu_cnt == 4'b0110) ? temp                           : // lw
+                   (latched_lsu_cnt == 4'b0111) ? {24'b0, byte_sel}              : // lbu
+                   (latched_lsu_cnt == 4'b1000) ? {16'b0, half_sel}              : // lhu
+                   32'b0;
+
+// AXI 握手信号
+wire ar_handshake = o_lsu_arvalid && i_lsu_arready;
+wire r_handshake  = i_lsu_rvalid  && o_lsu_rready;
+wire aw_handshake = o_lsu_awvalid && i_lsu_awready;
+wire w_handshake  = o_lsu_wvalid  && i_lsu_wready;
+wire b_handshake  = i_lsu_bvalid  && o_lsu_bready;
+
+// store 时跟踪 AW/W 两个通道是否都完成
+reg aw_done, w_done;
+
+// LSU 状态机
+typedef enum logic [2:0] {
+  LSU_IDLE,
+  LSU_LOAD_AR,
+  LSU_LOAD_R,
+  LSU_STORE_AW,
+  LSU_STORE_B,
+  LSU_DONE,
+  LSU_WAIT_WBU
+} lsu_state_t;
+
+lsu_state_t state;
+
+always_ff @(posedge clock) begin
+  if (reset) begin
+    state           <= LSU_IDLE;
+    lsu_exu_ready   <= 1'b1;
+    lsu_wbu_valid   <= 1'b0;
+    o_lsu_arvalid   <= 1'b0;
+    o_lsu_araddr    <= 32'b0;
+    o_lsu_rready    <= 1'b0;
+    o_lsu_awvalid   <= 1'b0;
+    o_lsu_awaddr    <= 32'b0;
+    o_lsu_wvalid    <= 1'b0;
+    o_lsu_wdata     <= 32'b0;
+    o_lsu_bready    <= 1'b0;
+    latched_addr    <= 32'b0;
+    latched_lsu_cnt <= 4'b0;
+    aw_done         <= 1'b0;
+    w_done          <= 1'b0;
+    latched_wdata   <= 32'b0;
+    temp            <= 32'b0;
+    o_raddr1        <= 5'b0;
+    o_raddr2        <= 5'b0;
+    o_waddr         <= 5'b0;
+    o_wdata         <= 32'b0;
+    o_pc            <= 32'h80000000;
+    o_wbu_cnt       <= 1'b0;
+  end else begin
+    unique case (state)
+      LSU_IDLE: begin
+        if (exu_lsu_handshake) begin
+          lsu_exu_ready   <= 1'b0;
+          latched_addr    <= is_load ? i_lsu_raddr : i_lsu_waddr;
+          latched_lsu_cnt <= i_lsu_cnt;
+          latched_wdata   <= i_lsu_wdata;
+          o_raddr1        <= i_raddr1;
+          o_raddr2        <= i_raddr2;
+          o_waddr         <= i_waddr;
+          o_wdata         <= i_wdata;
+          o_pc            <= i_pc;
+          o_wbu_cnt       <= i_wbu_cnt;
+          if (is_load) begin
+            o_lsu_araddr  <= i_lsu_raddr;
+            o_lsu_arvalid <= 1'b1;
+            o_lsu_rready  <= 1'b1;
+            state         <= LSU_LOAD_AR;
+          end else if (is_store) begin
+            o_lsu_awaddr  <= i_lsu_waddr;
+            o_lsu_awvalid <= 1'b1;
+            o_lsu_wvalid  <= 1'b1;
+            o_lsu_wdata   <= i_lsu_wdata;
+            aw_done       <= 1'b0;
+            w_done        <= 1'b0;
+            state         <= LSU_STORE_AW;
+          end else begin
+            // 非访存指令：等一拍让输出寄存器稳定后再通知 WBU
+            state         <= LSU_DONE;
           end
-        end
-        WAIT : begin
-          if((i_lsu_cnt === 4'b0) && wbu_mem_ready) begin
-            nstate = IDLE;
-          end else if (load && i_lsu_rvalid && i_lsu_arready) begin
-            nstate = IDLE;
-          end else if (store && i_lsu_wready && i_lsu_awready
-                             && (i_lsu_bresp==2'h0) && i_lsu_bvalid) begin
-            nstate = IDLE;
-          end
-        end
-        default: nstate = IDLE;
-      endcase
-  end
-
-  always_ff @(posedge clock) begin
-      if (reset) begin
-          o_waddr   <= 5'b0;
-          o_wdata   <= 32'b0;
-          o_wbu_cnt <= 1'b0;
-          o_ebreak  <= 1'b0;
-          o_pc      <= 32'b0;
-      end else begin
-          unique case (cstate)
-            IDLE : begin
-              if((i_lsu_cnt === 4'b0) && wbu_mem_ready) begin
-                o_waddr   <= i_waddr;
-                o_wdata   <= i_wdata;
-                o_wbu_cnt <= i_wbu_cnt;
-                o_ebreak  <= i_ebreak;
-                o_pc      <= i_pc;
-              end else if (load && i_lsu_rvalid) begin
-                o_waddr   <= i_waddr;
-                o_wdata   <= lsu_rdata;
-                o_wbu_cnt <= i_wbu_cnt;
-                o_ebreak  <= i_ebreak;
-                o_pc      <= i_pc;
-              end else if (store && i_lsu_wready && (i_lsu_bresp==2'h0) && i_lsu_bvalid) begin
-                o_waddr   <= 5'b0;  // store不写寄存器
-                o_wdata   <= 32'b0;
-                o_wbu_cnt <= i_wbu_cnt;
-                o_ebreak  <= i_ebreak;
-                o_pc      <= i_pc;
-              end
-            end
-            WAIT : begin
-                o_waddr   <= o_waddr;
-                o_wdata   <= o_wdata;
-                o_wbu_cnt <= o_wbu_cnt;
-                o_ebreak  <= o_ebreak;
-                o_pc      <= o_pc;
-            end
-            default: begin
-            end
-          endcase
+        end else if (lsu_wbu_handshake)
+          lsu_wbu_valid <= 1'b0;
       end
-  end
-
-  assign temp  = (i_lsu_rvalid && (i_lsu_rresp == 2'h0) && load) ? i_lsu_rdata : 32'b0;
-
-  reg [7:0] byte_sel;
-  always_comb begin
-    unique case (i_lsu_addr[1:0])
-        2'b00 : byte_sel = temp[ 7: 0] ;
-        2'b01 : byte_sel = temp[15: 8] ;
-        2'b10 : byte_sel = temp[23:16] ;
-        2'b11 : byte_sel = temp[31:24] ;
-endcase
-  end
-
-  reg [15:0] half_sel;
-  always_comb begin
-    unique case (i_lsu_addr[1])
-      1'b0 : half_sel = temp[15: 0] ;
-      1'b1 : half_sel = temp[31:16] ;
+      LSU_LOAD_AR: begin
+        if (ar_handshake) begin
+          o_lsu_arvalid <= 1'b0;
+          state         <= LSU_LOAD_R;
+        end
+      end
+      LSU_LOAD_R: begin
+        if (r_handshake) begin
+          temp          <= i_lsu_rdata;
+          o_lsu_rready  <= 1'b0;
+          state         <= LSU_DONE;
+        end
+      end
+      LSU_STORE_AW: begin
+        if (aw_handshake) begin
+          o_lsu_awvalid <= 1'b0;
+          aw_done       <= 1'b1;
+        end
+        if (w_handshake) begin
+          o_lsu_wvalid  <= 1'b0;
+          w_done        <= 1'b1;
+        end
+        // 用 flag 判断两个通道是否都完成，避免寄存器更新延迟问题
+        if ((aw_handshake || aw_done) && (w_handshake || w_done)) begin
+          o_lsu_bready <= 1'b1;
+          state        <= LSU_STORE_B;
+        end
+      end
+      LSU_STORE_B: begin
+        if (b_handshake) begin
+          o_lsu_bready <= 1'b0;
+          state        <= LSU_DONE;
+        end
+      end
+      LSU_DONE: begin
+        // load 指令：将读回数据写入 o_wdata
+        if (latched_lsu_cnt >= 4'b0100)
+          o_wdata <= lsu_rdata;
+        lsu_wbu_valid <= 1'b1;
+        state         <= LSU_WAIT_WBU;
+      end
+      LSU_WAIT_WBU: begin
+        if (lsu_wbu_handshake) begin
+          lsu_wbu_valid <= 1'b0;
+          lsu_exu_ready <= 1'b1;
+          state         <= LSU_IDLE;
+        end
+      end
     endcase
   end
-
-  assign lsu_rdata  = (i_lsu_cnt == 4'b0100) ? {{24{byte_sel[ 7]}}, byte_sel} : // lb
-                      (i_lsu_cnt == 4'b0101) ? {{16{half_sel[15]}}, half_sel} : // lh
-                      (i_lsu_cnt == 4'b0110) ? temp : // lw
-                      (i_lsu_cnt == 4'b0111) ? {24'b0, byte_sel} : // lbu
-                      (i_lsu_cnt == 4'b1000) ? {16'b0, half_sel} : // lhu
-                      32'b0 ;
+end
 
 endmodule
 
+module ysyx_24080018_WBU(
+  input wire        clock,
+  input wire        reset,
 
-module ysyx_24080018_GPR(
-  input         clock,
-  input         reset,
+  input wire        lsu_wbu_valid,
+  output reg        wbu_lsu_ready,
 
-  input         mem_wbu_valid,
-  output        wbu_mem_ready,
-  output        wbu_ifu_retire,
+  output wire [31:0] rdata1,
+  output wire [31:0] rdata2,
 
-  output [31:0] rdata1,
-  output [31:0] rdata2,
-
-  input  [GPR_WIDTH-1:0] raddr1,
-  input  [GPR_WIDTH-1:0] raddr2,
-  input  [GPR_WIDTH-1:0] i_waddr,
-  input  [31:0] i_wdata,
-  input  [PC_WIDTH-1:0] i_pc,
-  input         i_ebreak,
-  input         i_wbu_cnt
+  input wire [ 4:0] i_raddr1,
+  input wire [ 4:0] i_raddr2,
+  input wire [ 4:0] i_waddr,
+  input wire [31:0] i_wdata,
+  input wire [31:0] i_pc,
+  input wire        ebreak,
+  input wire        i_wbu_cnt
 );
-  localparam logic IDLE = 1'b0;
-  localparam logic WAIT = 1'b1;
-  reg cstate, nstate;
-  reg [31:0] rf [32];
-  assign wbu_mem_ready = cstate === IDLE;
 
-  assign rdata1 = (raddr1 == 5'b0) ? 32'b0 : rf[raddr1];
-  assign rdata2 = (raddr2 == 5'b0) ? 32'b0 : rf[raddr2];
+  reg [31:0] rf [32];
+
+  assign rdata1 = (i_raddr1 == 5'b0) ? 32'b0 :
+                  (wen && i_waddr == i_raddr1) ? i_wdata :
+                  rf[i_raddr1];
+  assign rdata2 = (i_raddr2 == 5'b0) ? 32'b0 :
+                  (wen && i_waddr == i_raddr2) ? i_wdata :
+                  rf[i_raddr2];
 
   wire wen;
-  assign wen = i_wbu_cnt && mem_wbu_valid;
-  assign wbu_ifu_retire = (mem_wbu_valid && wbu_mem_ready);
-
-  always_ff @(posedge clock) begin
-    if(reset) begin
-      cstate <= IDLE;
-    end else begin
-      cstate <= nstate;
-    end
-  end
+  assign wen = i_wbu_cnt && lsu_wbu_valid;
 
   always_comb begin
-    case (cstate)
-      IDLE : begin
-        if(mem_wbu_valid) begin
-          nstate = WAIT;
-        end else begin
-          nstate = IDLE;
-        end
-      end
-      WAIT : begin
-        nstate = IDLE;
-      end
-      default: begin
-        nstate = IDLE;
-      end
-    endcase
+    if(ebreak) begin
+      NPCTRAP(i_pc,rf[10]);
+    end
   end
-
   always_ff @(posedge clock) begin
     if(reset) begin
-      for(integer i = 1; i < 16; i = i + 1) begin
+      wbu_lsu_ready <= 1'b1;
+      for(integer i = 1; i < 32; i = i + 1) begin
         rf[i] <= 32'b0;
       end
     end else begin
-      if(wbu_mem_ready && mem_wbu_valid ) begin
+      if(wbu_lsu_ready && lsu_wbu_valid ) begin
         if(wen && (i_waddr != 5'b0)) begin
           rf[i_waddr] <= i_wdata;
         end
       end
     end
   end
-
 endmodule
-
-module ysyx_24080018_CSR(
-  input         exu_csr_valid,
-  output        csr_exu_ready,
-  output        csr_ifu_retire,
-
-  input         clock,
-  input         reset,
-  input  [ 2:0] i_csr_cnt,
-  input  [11:0] i_csr_imm,
-  input  [31:0] i_wdata,
-  output [31:0] o_rdata
-);
-
-  localparam logic IDLE = 1'b0;
-  localparam logic WAIT = 1'b1;
-  reg cstate, nstate;
-
-  reg [31:0] mcycle   ;
-  reg [31:0] mcycleh  ;
-  reg [31:0] mvendorid;
-  reg [31:0] marchid  ;
-
-  wire [31:0] temp;
-
-  assign csr_exu_ready  = (cstate == IDLE);
-  assign csr_ifu_retire = (csr_exu_ready && exu_csr_valid);
-
-  assign o_rdata = temp;
-  assign temp = ( i_csr_imm == 12'hb00 ) ? mcycle    :
-                ( i_csr_imm == 12'hb80 ) ? mcycleh   :
-                ( i_csr_imm == 12'hf11 ) ? mvendorid :
-                ( i_csr_imm == 12'hf12 ) ? marchid   :
-                32'b0;
-
-  always_ff @(posedge clock) begin
-    if(reset) begin
-      cstate <= IDLE;
-    end else begin
-      cstate <= nstate;
-    end
-  end
-
-  always_comb begin
-    unique case (cstate)
-      IDLE : begin
-        if(exu_csr_valid) begin
-          nstate = WAIT;
-        end else begin
-          nstate = IDLE;
-        end
-      end
-      WAIT : begin
-        nstate = IDLE;
-      end
-    endcase
-  end
-
-  always_ff @(posedge clock) begin
-    if(reset) begin
-      mcycle    <= 32'b0;
-      mcycleh   <= 32'b0;
-      mvendorid <= 32'h79737978 ;
-      marchid   <= 32'h16F6E92  ;
-    end else begin
-      unique case (cstate)
-        IDLE : begin
-          if(i_csr_cnt == 3'b010) begin // csrrs
-            case (i_csr_imm)
-              12'hb00 : mcycle    <= temp | i_wdata;
-              12'hb80 : mcycleh   <= temp | i_wdata;
-              12'hf11 : mvendorid <= temp | i_wdata;
-              12'hf12 : marchid   <= temp | i_wdata;
-              default : begin
-                mcycle    <= mcycle    ;
-                mcycleh   <= mcycleh   ;
-                mvendorid <= mvendorid ;
-                marchid   <= marchid   ;
-              end
-            endcase
-          end else if (i_csr_cnt == 3'b001) begin // csrrw
-            case (i_csr_imm)
-              12'hb00 : mcycle    <= i_wdata;
-              12'hb80 : mcycleh   <= i_wdata;
-              12'hf11 : mvendorid <= i_wdata;
-              12'hf12 : marchid   <= i_wdata;
-              default : begin
-                mcycle    <= mcycle    ;
-                mcycleh   <= mcycleh   ;
-                mvendorid <= mvendorid ;
-                marchid   <= marchid   ;
-              end
-            endcase
-          end
-        end
-        WAIT : begin
-//$display("change csr");
-        end
-      endcase
-      if (mcycle == 32'hffffffff) begin
-        mcycle  <= 32'b0;
-        mcycleh <= mcycleh + 32'h1;
-      end else begin
-        mcycle  <= mcycle + 32'h1;
-      end
-
-    end
-  end
-endmodule
-
 
 module ysyx_24080018_arbiter(
     input            clock,
     input            reset,
 
-    // IFU 接口
     input     [31:0] o_ifu_araddr  ,
     input            o_ifu_arvalid ,
     output           i_ifu_arready ,
@@ -1303,7 +1077,6 @@ module ysyx_24080018_arbiter(
     output           i_ifu_rvalid  ,
     input            o_ifu_rready  ,
 
-    // LSU 接口
     input     [31:0] o_lsu_awaddr  ,
     input            o_lsu_awvalid ,
     output           i_lsu_awready ,
@@ -1322,7 +1095,6 @@ module ysyx_24080018_arbiter(
     output           i_lsu_bvalid  ,
     input            o_lsu_bready  ,
 
-    // AXI Master 接口
     input           io_master_awready,
     output          io_master_awvalid,
     output [31:0]   io_master_awaddr,
@@ -1341,7 +1113,6 @@ module ysyx_24080018_arbiter(
     input  [ 1:0]   io_master_rresp,
     input  [31:0]   io_master_rdata
 );
-    // 状态编码
     typedef enum logic [2:0] {
       IDLE    = 3'b001,
       IFU_RD  = 3'b010,
@@ -1351,155 +1122,116 @@ module ysyx_24080018_arbiter(
     } state_e;
     state_e cstate,nstate;
 
-    // 当前事务信息
-    reg current_master;      // 0: IFU, 1: LSU
-    reg current_is_write;    // 1: 写, 0: 读
-    reg [31:0] current_addr; // 当前地址
-    // 响应数据寄存器
-    reg [31:0] captured_rdata;
-    reg [1:0] captured_rresp;
-    reg [1:0] captured_bresp;
-    reg response_valid;
-    // 上一次的主机（用于轮询）
-    reg last_master;
-    // ===== 状态机 =====
+    // 当前事务信息（寄存器，在状态转移时锁存）
+    reg        current_master;
+    reg        current_is_write;
+    reg [31:0] current_addr;
+
+    // LSU_WR 状态下独立跟踪 AW/W 通道是否完成
+    reg arb_aw_done, arb_w_done;
+
     always @(posedge clock) begin
         if (reset) begin
-            cstate <= IDLE;
-            last_master <= 1'b0;
-            captured_rdata <= 32'b0;
-            captured_rresp <= 2'b0;
-            captured_bresp <= 2'b0;
-            response_valid <= 1'b0;
+            cstate           <= IDLE;
+            current_master   <= 1'b0;
+            current_is_write <= 1'b0;
+            current_addr     <= 32'b0;
+            arb_aw_done      <= 1'b0;
+            arb_w_done       <= 1'b0;
         end else begin
             cstate <= nstate;
-            // 记录完成的事务主机
-            if (cstate == RESP && nstate == IDLE) begin
-                last_master <= current_master;
+            // 进入 LSU_WR 时清零完成标志
+            if (cstate == IDLE && o_lsu_awvalid)
+                {arb_aw_done, arb_w_done} <= 2'b00;
+            // 在 LSU_WR 状态下分别记录 AW/W 握手完成
+            if (cstate == LSU_WR) begin
+                if (io_master_awready) arb_aw_done <= 1'b1;
+                if (io_master_wready)  arb_w_done  <= 1'b1;
             end
-            // 捕获响应数据
-            if (cstate == RESP && io_master_rvalid && io_master_rready) begin
-                captured_rdata <= io_master_rdata;
-                captured_rresp <= io_master_rresp;
-                response_valid <= 1'b1;
-            end else if (cstate == RESP && io_master_bvalid && io_master_bready) begin
-                captured_bresp <= io_master_bresp;
-                response_valid <= 1'b1;
-            end else if (response_valid) begin
-                if ((!current_is_write &&
-                     ((current_master == 1'b0 && o_ifu_rready) ||
-                      (current_master == 1'b1 && o_lsu_rready))) ||
-                    (current_is_write && o_lsu_bready)) begin
-                    response_valid <= 1'b0;
+            // 在离开 IDLE 时锁存事务信息
+            if (cstate == IDLE) begin
+                if (o_ifu_arvalid) begin
+                    current_master   <= 1'b0;
+                    current_is_write <= 1'b0;
+                    current_addr     <= o_ifu_araddr;
+                end else if (o_lsu_awvalid) begin
+                    current_master   <= 1'b1;
+                    current_is_write <= 1'b1;
+                    current_addr     <= o_lsu_awaddr;
+                end else if (o_lsu_arvalid) begin
+                    current_master   <= 1'b1;
+                    current_is_write <= 1'b0;
+                    current_addr     <= o_lsu_araddr;
                 end
             end
         end
     end
-    // ===== 下一状态逻辑 =====
+
     always_comb begin
         nstate = cstate;
-        current_master = last_master;  // 默认值
-        current_is_write = 1'b0;
-        current_addr = 32'b0;
         case (cstate)
             IDLE: begin
-                if (o_ifu_arvalid) begin
+                if (o_ifu_arvalid)
                     nstate = IFU_RD;
-                    current_master = 1'b0;
-                    current_is_write = 1'b0;
-                    current_addr = o_ifu_araddr;
-                end else if (o_lsu_awvalid) begin
+                else if (o_lsu_awvalid)
                     nstate = LSU_WR;
-                    current_master = 1'b1;
-                    current_is_write = 1'b1;
-                    current_addr = o_lsu_awaddr;
-                end else if (o_lsu_arvalid) begin
+                else if (o_lsu_arvalid)
                     nstate = LSU_RD;
-                    current_master = 1'b1;
-                    current_is_write = 1'b0;
-                    current_addr = o_lsu_araddr;
-                end
             end
             IFU_RD: begin
-                current_master = 1'b0;
-                current_is_write = 1'b0;
-                current_addr = o_ifu_araddr;
-                if (io_master_arready) begin
+                if (io_master_arready)
                     nstate = RESP;
-                end
             end
             LSU_WR: begin
-                current_master = 1'b1;
-                current_is_write = 1'b1;
-                current_addr = o_lsu_awaddr;
-                if (io_master_awready && io_master_wready) begin
+                // AW/W 通道独立握手，两者都完成才转 RESP
+                if ((io_master_awready || arb_aw_done) && (io_master_wready || arb_w_done))
                     nstate = RESP;
-                end
             end
             LSU_RD: begin
-                current_master = 1'b1;
-                current_is_write = 1'b0;
-                current_addr = o_lsu_araddr;
-                if (io_master_arready) begin
+                if (io_master_arready)
                     nstate = RESP;
-                end
             end
             RESP: begin
-                current_master = current_master;  // 保持
-                current_is_write = current_is_write;
-                current_addr = current_addr;
-                // 等待响应完成
-                if ((current_master == 1'b0 && !current_is_write &&
-                     io_master_rvalid && io_master_rready) ||
-                    (current_master == 1'b1 && current_is_write &&
-                     io_master_bvalid && io_master_bready) ||
-                    (current_master == 1'b1 && !current_is_write &&
-                     io_master_rvalid && io_master_rready))
-                begin
+                if ((!current_is_write && io_master_rvalid && io_master_rready) ||
+                    ( current_is_write && io_master_bvalid && io_master_bready))
                     nstate = IDLE;
-                end
             end
             default: nstate = IDLE;
         endcase
     end
     // ===== 输出信号 =====
-    // AR通道（读地址）
-    assign io_master_araddr = current_addr;
+    // AR 通道：IFU_RD/LSU_RD 状态时发出读请求
+    assign io_master_araddr  = current_addr;
     assign io_master_arvalid = (cstate == IFU_RD || cstate == LSU_RD);
-    // AW通道（写地址）
-    assign io_master_awaddr = current_addr;
-    assign io_master_awvalid = (cstate == LSU_WR);
-    // W通道（写数据）
-    assign io_master_wdata = o_lsu_wdata;
-    assign io_master_wstrb = o_lsu_wstrb;
-    assign io_master_wvalid = (cstate == LSU_WR);
-    // R通道（读响应）- 始终准备好接收
-//    assign io_master_rready = (cstate == RESP && !current_is_write) ?
-//                              ((current_master == 1'b0) ? o_ifu_rready : o_lsu_rready) : 1'b1;
-    assign io_master_rready = 1'b1;
+    assign io_master_rready  = (cstate == RESP && !current_is_write);
 
-    // B通道（写响应）
-    assign io_master_bready = (cstate == RESP && current_is_write) ? o_lsu_bready : 1'b1;
-    // 到IFU的接口
+    // AW/W 通道：LSU_WR 状态时发出写请求，握手完成后撤销 valid
+    assign io_master_awaddr  = current_addr;
+    assign io_master_awvalid = (cstate == LSU_WR) && !arb_aw_done;
+    assign io_master_wdata   = o_lsu_wdata;
+    assign io_master_wstrb   = o_lsu_wstrb;
+    assign io_master_wvalid  = (cstate == LSU_WR) && !arb_w_done;
+
+    // B 通道：RESP 且写操作时，透传 LSU 的 bready
+    assign io_master_bready  = (cstate == RESP && current_is_write) ? o_lsu_bready : 1'b0;
+
+    // 到 IFU 的接口
+    // arready：IFU_RD 状态时表示仲裁器已接受请求
     assign i_ifu_arready = (cstate == IFU_RD);
-    assign i_ifu_rdata = (current_master == 1'b0 && !current_is_write) ?
-                         (response_valid ? captured_rdata : io_master_rdata) : 32'b0;
-    assign i_ifu_rresp = (current_master == 1'b0 && !current_is_write) ?
-                         (response_valid ? captured_rresp : io_master_rresp) : 2'b0;
-    assign i_ifu_rvalid = (current_master == 1'b0 && !current_is_write) &&
-                          (response_valid || io_master_rvalid);
-    // 到LSU的接口
-    assign i_lsu_awready = (cstate == LSU_WR);
-    assign i_lsu_wready = (cstate == LSU_WR);
-    assign i_lsu_arready = (cstate == LSU_RD);
-    assign i_lsu_rdata = (current_master == 1'b1 && !current_is_write) ?
-                         (response_valid ? captured_rdata : io_master_rdata) : 32'b0;
-    assign i_lsu_rresp = (current_master == 1'b1 && !current_is_write) ?
-                         (response_valid ? captured_rresp : io_master_rresp) : 2'b0;
-    assign i_lsu_rvalid = (current_master == 1'b1 && !current_is_write) &&
-                          (response_valid || io_master_rvalid);
-    assign i_lsu_bresp = (current_master == 1'b1 && current_is_write) ?
-                         (response_valid ? captured_bresp : io_master_bresp) : 2'b0;
-    assign i_lsu_bvalid = (current_master == 1'b1 && current_is_write) &&
-                          (response_valid || io_master_bvalid);
+    // rdata/rresp/rvalid：RESP 状态且当前是 IFU 读时，直通 master 响应
+    assign i_ifu_rdata   = io_master_rdata;
+    assign i_ifu_rresp   = io_master_rresp;
+    assign i_ifu_rvalid  = (cstate == RESP && !current_is_write && current_master == 1'b0)
+                           && io_master_rvalid;
+
+    // 到 LSU 的接口
+    assign i_lsu_awready = (cstate == LSU_WR) ? io_master_awready : 1'b0;
+    assign i_lsu_wready  = (cstate == LSU_WR) ? io_master_wready  : 1'b0;
+    assign i_lsu_arready = (cstate == LSU_RD) ? io_master_arready : 1'b0;
+    assign i_lsu_rdata   = io_master_rdata;
+    assign i_lsu_rresp   = io_master_rresp;
+    assign i_lsu_rvalid  = (cstate == RESP && !current_is_write && current_master == 1'b1)
+                           && io_master_rvalid;
+    assign i_lsu_bresp   = io_master_bresp;
+    assign i_lsu_bvalid  = (cstate == RESP && current_is_write) && io_master_bvalid;
 endmodule

@@ -17,7 +17,7 @@ LDLIBS += -lreadline $(shell llvm-config --libs all) $(shell llvm-config --ldfla
 MAINARGS_MAX_LEN = 64
 MAINARGS_PLACEHOLDER = the_insert-arg_rule_in_Makefile_will_insert_mainargs_here
 CFLAGS += -DMAINARGS_MAX_LEN=$(MAINARGS_MAX_LEN) -DMAINARGS_PLACEHOLDER=$(MAINARGS_PLACEHOLDER)
-NPCFLAGS += -b
+#NPCFLAGS += -b
 
 run: insert-arg
 	@echo "Running $(IMAGE).bin on NPC " 

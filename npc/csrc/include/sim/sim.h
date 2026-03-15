@@ -13,11 +13,14 @@ extern VerilatedFstC* tfp ;
 extern TOP_NAME* top;
 extern TOP_ROOT* root;
 
-#define  PC   root->ysyx_24080018__DOT__ifu_pc
-#define  DNPC root->ysyx_24080018__DOT__ifu__DOT__target_pc
-#define  INST root->ysyx_24080018__DOT__inst
-#define  GPR  root->ysyx_24080018__DOT__gpr__DOT__rf
-#define  CSR_cnt  root->ysyx_24080018__DOT__idu_csr_cnt
+#define  PC      root->ysyx_24080018__DOT__ifu_pc
+#define  WBU_PC  root->ysyx_24080018__DOT__lsu_pc
+#define  WBU_VALID root->ysyx_24080018__DOT__lsu_wbu_valid
+#define  WBU_READY root->ysyx_24080018__DOT__wbu_lsu_ready
+#define  DNPC   root->ysyx_24080018__DOT__exu_br_target
+#define  INST   root->ysyx_24080018__DOT__ifu_inst
+#define  GPR    root->ysyx_24080018__DOT__wbu__DOT__rf
+//#define  CSR_cnt  root->ysyx_24080018__DOT__idu_csr_cnt
 //#define  MCAUSE  root->top__DOT__csr_t0__DOT__mcause
 //#define  MTVEC   root->top__DOT__csr_t0__DOT__mtvec
 //#define  MEPC		 root->top__DOT__csr_t0__DOT__mepc
@@ -86,7 +89,6 @@ void NPCTRAP(int pc,int x10);
 void clock_tick();
 void rst_begin();
 void set_npc_state(int state, uint32_t pc,int halt_ret);
-int  isa_exec_once(Decode *s);
 void cpu_exec(uint64_t n);
 int  is_exit_status_bad();
 

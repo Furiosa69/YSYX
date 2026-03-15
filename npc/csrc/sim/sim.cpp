@@ -80,7 +80,7 @@ void set_npc_state(int state, uint32_t pc, int halt_ret) {
   npc_state.halt_ret = halt_ret;
 }
 
-void NPCTRAP(uint32_t pc ,int halt_ret){
+extern "C" void NPCTRAP(uint32_t pc ,int halt_ret){
 	set_npc_state(NPC_END,pc,halt_ret);
 }
 
@@ -119,39 +119,14 @@ void rst_begin(){
 		)
 }
 
-static int decode_exec(Decode *s){
-	s->dnpc = PC;
-	return 0;
-}
+// 每个半周期调用一次，处理 AXI 总线信号
+static uint32_t saved_raddr = 0;
+static uint32_t saved_waddr = 0;
+static uint32_t saved_wdata = 0;
+static uint8_t  saved_wstrb = 0;
+static bool     pending_write = false;
 
-int isa_exec_once(Decode *s){
-	clock_tick();
-	s->isa.inst.val = INST;
-
-	IFONE(CONFIG_RINGBUFF,
-		add_to_ringbuffer(&ringbuf,PC,INST);
-	)
-
-	clock_tick();
-	return decode_exec(s);
-}
-
-typedef enum {
-    IDLE,
-    ADDR_PHASE,
-    DATA_PHASE,
-    RESP_PHASE
-} SimState;
-
-static SimState sim_state = IDLE;
-static bool is_write = false;
-static uint32_t pending_waddr = 0;
-static uint32_t pending_raddr = 0;
-static uint32_t pending_wdata = 0;
-static uint8_t pending_wstrb = 0;
-static int delay_counter = 0;
-
-static void exec_once(Decode *s, uint32_t pc) {
+static void axi_tick() {
     AWREADY = 0;
     WREADY  = 0;
     BVALID  = 0;
@@ -160,78 +135,58 @@ static void exec_once(Decode *s, uint32_t pc) {
     RVALID  = 0;
     RDATA   = 0;
     RRESP   = 0;
-    
-    switch (sim_state) {
-        case IDLE:
-            if (AWVALID) {
-                is_write = true;
-                pending_waddr = AWADDR;
-                sim_state = ADDR_PHASE;
-                AWREADY = 1;  // 接受地址
-                printf("Write request: addr=0x%08x\n", AWADDR);
-            }
-            else if (ARVALID) {
-                is_write = false;
-                pending_raddr = ARADDR;
-                sim_state = ADDR_PHASE;
-                ARREADY = 1;  // 接受地址
-                printf("Read request: addr=0x%08x\n", ARADDR);
-            }
-            break;
-            
-        case ADDR_PHASE:
-            if (is_write) {
-                // 写事务：等待数据
-                if (AWVALID) {
-                    pending_wdata = WDATA;
-                    pending_wstrb = WSTRB;
-                    WREADY = 1;  // 接受数据
-                    sim_state = DATA_PHASE;
-                    printf("Write data: 0x%08x, strb=0x%02x\n", WDATA, WSTRB);
-                }
-            } else {
-                // 读事务：直接进入响应阶段（模拟延迟）
-                delay_counter = 1;  // 2个周期延迟
-                sim_state = RESP_PHASE;
-            }
-            break;
-            
-        case DATA_PHASE:
-            // 写事务的数据阶段完成后，进入响应阶段
-            delay_counter = 1;
-            sim_state = RESP_PHASE;
-            break;
-            
-        case RESP_PHASE:
-            if (delay_counter > 0) {
-                delay_counter--;
-            } else {
-                if (is_write) {
-                    if (BREADY) {
-                        pmem_write(pending_waddr,pending_wdata,pending_wstrb);
-                        
-                        BVALID = 1;
-                        BRESP  = 0;  // OKAY
-                        sim_state = IDLE;
-                        printf("Write complete: addr=0x%08x\n", pending_waddr);
-                    }
-                } else {
-                    if (RREADY) {
-                        uint32_t data = pmem_read(pending_raddr, 4);
-                        RVALID = 1;
-                        RDATA  = data;
-                        RRESP  = 0;  // OKAY
-                        sim_state = IDLE;
-                        printf("Read complete: addr=0x%08x, data=0x%08x\n", pending_raddr, data);
-                    }
-                }
-            }
-            break;
+
+    if (ARVALID) {
+        ARREADY     = 1;
+        saved_raddr = ARADDR;
     }
+    if (RREADY) {
+        RVALID = 1;
+        RDATA  = pmem_read(saved_raddr, 4);
+ //       printf("Read : addr=0x%08x, data=0x%08x\n", saved_raddr, RDATA);
+        RRESP  = 0;
+    }
+    if (AWVALID && WVALID) {
+        AWREADY      = 1;
+        WREADY       = 1;
+        saved_waddr  = AWADDR;
+        saved_wdata  = WDATA;
+        saved_wstrb  = WSTRB;
+        pending_write = true;
+    }
+    if (BREADY && pending_write) {
+        pmem_write(saved_waddr, saved_wdata, saved_wstrb);
+//        printf("Write: addr=0x%08x, data=0x%08x, strb=0x%02x\n", saved_waddr, saved_wdata, saved_wstrb);
+        BVALID        = 1;
+        BRESP         = 0;
+        pending_write = false;
+    }
+}
+
+static void exec_once(Decode *s, uint32_t pc) {
+    bool done = false;
+    do {
+        axi_tick();
+        clock_tick(); // 上升沿，RTL 采样输入
+        clock_tick(); // 下降沿
+//        printf("ifu_arvalid=%d ARVALID=%d ARREADY=%d RVALID=%d RREADY=%d WBU_VALID=%d WBU_READY=%d\n",
+//            (int)root->ysyx_24080018__DOT__io_ifu_arvalid,
+//            (int)ARVALID, (int)ARREADY, (int)RVALID, (int)RREADY,
+//            (int)WBU_VALID, (int)WBU_READY);
+        if (WBU_VALID && WBU_READY) {
+            done = true;
+        }
+    } while (!done);
 
   s->pc = pc;
-  s->snpc = pc;
-  isa_exec_once(s);
+  s->snpc = pc + 4;
+  s->isa.inst.val = INST;
+  s->dnpc = PC;
+
+	IFONE(CONFIG_RINGBUFF,
+		add_to_ringbuffer(&ringbuf, pc, s->isa.inst.val);
+	)
+
   cpu.pc = s->dnpc;
 
 	for(int i = 0; i<32 ; ++i){

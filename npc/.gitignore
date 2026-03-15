@@ -1,0 +1,6 @@
+*
+!vsrc/
+!csrc/
+!bin/
+!Makefile
+!README.md

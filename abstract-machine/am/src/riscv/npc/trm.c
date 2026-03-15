@@ -46,14 +46,14 @@ void write_marchid(unsigned long value){
 	asm volatile ("csrw 0xF12, %0" : : "r"(value));
 }
 void _trm_init() {
-	write_mvendorid(0x79737978);
-	write_marchid(0x16F6E92);
-
-	unsigned long mvendorid_val = read_mvendorid();
-	unsigned long marchid_val   = read_marchid();
-
-	printf("mvendorid is 0x%lx\n",mvendorid_val);
-	printf("marchid is 0x%lx\n",marchid_val);
+//	write_mvendorid(0x79737978);
+//	write_marchid(0x16F6E92);
+//
+//	unsigned long mvendorid_val = read_mvendorid();
+//	unsigned long marchid_val   = read_marchid();
+//
+//	printf("mvendorid is 0x%lx\n",mvendorid_val);
+//	printf("marchid is 0x%lx\n",marchid_val);
 
   int ret = main(mainargs);
   halt(ret);
