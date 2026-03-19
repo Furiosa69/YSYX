@@ -38,6 +38,7 @@ NPC_EXEC := ${BIN}
 CONFIG_FTRACE = $(shell grep -q "CONFIG_FTRACE 1" $(NPC_HOME)/csrc/include/config/config.h && echo 1 || echo 0)
 CONFIG_ETRACE = $(shell grep -q "CONFIG_ETRACE 1" $(NPC_HOME)/csrc/include/config/config.h && echo 1 || echo 0)
 CONFIG_MTRACE = $(shell grep -q "CONFIG_MTRACE 1" $(NPC_HOME)/csrc/include/config/config.h && echo 1 || echo 0)
+CONFIG_DIFFTEST = $(shell grep -q "CONFIG_DIFFTEST 1" $(NPC_HOME)/csrc/include/config/config.h && echo 1 || echo 0)
 TRACE_NEED = $(shell [ $(CONFIG_FTRACE) -eq 1 -o $(CONFIG_ETRACE) -eq 1 -o $(CONFIG_MTRACE) -eq 1 ] && echo 1 || echo 0)
 
 ifeq ($(TRACE_NEED),1)
@@ -45,10 +46,16 @@ TRACE_DIR = $(NPC_HOME)/trace
 $(shell mkdir -p $(TRACE_DIR))
 endif
 
+ifeq ($(CONFIG_DIFFTEST),1)
+ARGS += -d $(NEMU_HOME)/build/riscv32-nemu-interpreter-so
+endif
+
+ifeq ($(CONFIG_FTRACE),1)
+ARGS += -f $(NPC_HOME)/bin/microbench-riscv32e-npc.elf
+endif
+
 # Trace
-IMG  ?=  $(NPC_HOME)/bin/dummy-riscv32e-npc.bin
-#ARGS += -d $(NEMU_HOME)/build/riscv32-nemu-interpreter-so
-#ARGS += -f $(NPC_HOME)/bin/microbench-riscv32e-npc.elf
+IMG  ?=  $(NPC_HOME)/bin/test.bin
 ARGC ?= ${IMG}
 
 default: run

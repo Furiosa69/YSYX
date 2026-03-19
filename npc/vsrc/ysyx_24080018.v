@@ -171,14 +171,8 @@ ysyx_24080018_EXU exu(
   .o_lsu_wdata   (exu_lsu_wdata),
   .o_lsu_waddr   (exu_lsu_waddr),
   .o_lsu_raddr   (exu_lsu_raddr),
-  .o_raddr1         (exu_raddr1   ),
-  .o_raddr2         (exu_raddr2   ),
-  .i_fwd_exu_waddr  (exu_waddr    ),
-  .i_fwd_exu_wdata  (exu_wdata    ),
-  .i_fwd_exu_wen    (exu_wbu_cnt  ),
-  .i_fwd_lsu_waddr  (lsu_waddr    ),
-  .i_fwd_lsu_wdata  (lsu_wdata    ),
-  .i_fwd_lsu_wen    (lsu_wbu_cnt  )
+  .o_raddr1      (exu_raddr1   ),
+  .o_raddr2      (exu_raddr2   )
 );
 
 ysyx_24080018_LSU lsu(
@@ -625,14 +619,7 @@ module ysyx_24080018_EXU(
   output reg [31:0] o_lsu_waddr,
   output reg [31:0] o_lsu_raddr,
   output reg [ 4:0] o_raddr1,
-  output reg [ 4:0] o_raddr2,
-
-  input wire [ 4:0] i_fwd_exu_waddr,
-  input wire [31:0] i_fwd_exu_wdata,
-  input wire        i_fwd_exu_wen,
-  input wire [ 4:0] i_fwd_lsu_waddr,
-  input wire [31:0] i_fwd_lsu_wdata,
-  input wire        i_fwd_lsu_wen
+  output reg [ 4:0] o_raddr2
 );
 
 wire exu_lsu_handshake, idu_exu_handshake;
@@ -642,41 +629,29 @@ assign exu_lsu_handshake = exu_lsu_valid && lsu_exu_ready;
 wire UType, JType, BType, IType, SType, RType;
 assign {UType,JType,BType,IType,SType,RType} = i_ins_cnt;
 
-// Forwarding 选择：EXU阶段 > LSU阶段 > WBU传来的值
-wire fwd_exu_rs1 = i_fwd_exu_wen && (i_fwd_exu_waddr != 5'b0) && (i_fwd_exu_waddr == i_rs1);
-wire fwd_lsu_rs1 = i_fwd_lsu_wen && (i_fwd_lsu_waddr != 5'b0) && (i_fwd_lsu_waddr == i_rs1);
-wire fwd_exu_rs2 = i_fwd_exu_wen && (i_fwd_exu_waddr != 5'b0) && (i_fwd_exu_waddr == i_rs2);
-wire fwd_lsu_rs2 = i_fwd_lsu_wen && (i_fwd_lsu_waddr != 5'b0) && (i_fwd_lsu_waddr == i_rs2);
-
-wire [31:0] fwd_rdata1 = fwd_exu_rs1 ? i_fwd_exu_wdata :
-                         fwd_lsu_rs1 ? i_fwd_lsu_wdata :
-                         i_rdata1;
-wire [31:0] fwd_rdata2 = fwd_exu_rs2 ? i_fwd_exu_wdata :
-                         fwd_lsu_rs2 ? i_fwd_lsu_wdata :
-                         i_rdata2;
 
 wire [31:0] alu_a,alu_b;
 assign alu_a = (i_lui                    ) ? 32'b0      :
                (i_jalr | i_auipc | i_jal ) ? i_pc       :
-               fwd_rdata1;
+               i_rdata1;
 
 assign alu_b = (  i_jal | i_jalr         ) ? 32'd4      :
                (  UType | JType | IType  ) ? i_imm      :
-               (  RType | SType | BType  ) ? fwd_rdata2 :
+               (  RType | SType | BType  ) ? i_rdata2:
                32'b0;
 
 wire _br_taken;
-assign _br_taken = ( i_pc_cnt == 4'b0001 ) ? ($signed(fwd_rdata1) == $signed(fwd_rdata2)) :
-                   ( i_pc_cnt == 4'b0010 ) ? ($signed(fwd_rdata1) != $signed(fwd_rdata2)) :
-                   ( i_pc_cnt == 4'b0011 ) ? ($signed(fwd_rdata1) <  $signed(fwd_rdata2)) :
-                   ( i_pc_cnt == 4'b0100 ) ? ($signed(fwd_rdata1) >= $signed(fwd_rdata2)) :
-                   ( i_pc_cnt == 4'b0101 ) ? (        fwd_rdata1  <          fwd_rdata2 ) :
-                   ( i_pc_cnt == 4'b0110 ) ? (        fwd_rdata1  >=         fwd_rdata2 ) :
+assign _br_taken = ( i_pc_cnt == 4'b0001 ) ? ($signed(i_rdata1) == $signed(i_rdata2)) :
+                   ( i_pc_cnt == 4'b0010 ) ? ($signed(i_rdata1) != $signed(i_rdata2)) :
+                   ( i_pc_cnt == 4'b0011 ) ? ($signed(i_rdata1) <  $signed(i_rdata2)) :
+                   ( i_pc_cnt == 4'b0100 ) ? ($signed(i_rdata1) >= $signed(i_rdata2)) :
+                   ( i_pc_cnt == 4'b0101 ) ? (        i_rdata1  <          i_rdata2 ) :
+                   ( i_pc_cnt == 4'b0110 ) ? (        i_rdata1  >=         i_rdata2 ) :
                    ( i_pc_cnt == 4'b0111 ) ? 1'b1 : // jal
                    ( i_pc_cnt == 4'b1000 ) ? 1'b1 : // jalr
                    1'b0;
 
-assign o_br_target = (i_pc_cnt == 4'b1000) ? ((fwd_rdata1 + i_imm) & ~32'h1) : // jalr
+assign o_br_target = (i_pc_cnt == 4'b1000) ? ((i_rdata1 + i_imm) & ~32'h1) : // jalr
                         (i_pc + i_imm);                                            // jal / branch
 
 wire  [63:0]  shift_temp ;
@@ -752,10 +727,10 @@ always_ff @(posedge clock) begin
       o_csr_cnt     <= i_csr_cnt;
       o_lsu_cnt     <= i_lsu_cnt;
       // store: waddr = rs1 + imm, wdata = rs2
-      o_lsu_waddr   <= fwd_rdata1 + i_imm;
-      o_lsu_wdata   <= fwd_rdata2;
+      o_lsu_waddr   <= i_rdata1 + i_imm;
+      o_lsu_wdata   <= i_rdata2;
       // load: raddr = rs1 + imm
-      o_lsu_raddr   <= fwd_rdata1 + i_imm;
+      o_lsu_raddr   <= i_rdata1 + i_imm;
       o_raddr1      <= i_rs1;
       o_raddr2      <= i_rs2;
       o_br_taken    <= i_jal ? _br_taken : 1'b0;

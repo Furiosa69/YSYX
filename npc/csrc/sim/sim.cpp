@@ -197,6 +197,14 @@ static void exec_once(Decode *s, uint32_t pc) {
 //		cpu.csr[2] = MEPC  ;
 //		cpu.csr[3] = MSTATUS;
 
+	IFONE(CONFIG_WATCHPOINT,
+		wp_check();
+	)
+	IFONE(CONFIG_DIFFTEST,
+    if(WBU_READY && WBU_VALID){
+		  difftest_step(PC,DNPC);
+    }
+	)
 	IFONE(CONFIG_FTRACE,
 		print_all_function_names(PC,DNPC,INST);
 	)
@@ -238,13 +246,6 @@ static void execute(uint64_t n) {
 
     exec_once(&s, cpu.pc);
 
-		IFONE(CONFIG_WATCHPOINT,
-			wp_check();
-		)
-
-		IFONE(CONFIG_DIFFTEST,
-	  	difftest_step(PC,DNPC);
-		)
 
 		IFONE(CONFIG_VGA,
 			vga_update_screen();

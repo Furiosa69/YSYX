@@ -14,10 +14,9 @@ extern TOP_NAME* top;
 extern TOP_ROOT* root;
 
 #define  PC      root->ysyx_24080018__DOT__ifu_pc
-#define  WBU_PC  root->ysyx_24080018__DOT__lsu_pc
+#define  DNPC  root->ysyx_24080018__DOT__lsu_pc
 #define  WBU_VALID root->ysyx_24080018__DOT__lsu_wbu_valid
 #define  WBU_READY root->ysyx_24080018__DOT__wbu_lsu_ready
-#define  DNPC   root->ysyx_24080018__DOT__exu_br_target
 #define  INST   root->ysyx_24080018__DOT__ifu_inst
 #define  GPR    root->ysyx_24080018__DOT__wbu__DOT__rf
 //#define  CSR_cnt  root->ysyx_24080018__DOT__idu_csr_cnt
