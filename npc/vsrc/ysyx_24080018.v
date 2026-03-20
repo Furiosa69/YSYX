@@ -160,6 +160,7 @@ ysyx_24080018_EXU exu(
   .i_pc          (idu_pc       ),
   .o_pc          (exu_pc       ),
   .i_imm         (idu_imm      ),
+  .i_csr_imm     (idu_csr_imm  ),
   .i_rdata1      (wbu_rdata1   ),
   .i_rdata2      (wbu_rdata2   ),
   .i_waddr       (idu_rd       ),
@@ -448,7 +449,7 @@ module ysyx_24080018_IDU (
   output reg        o_jalr,
   output reg        o_auipc,
   output reg        o_jal,
-  output wire       ebreak,
+  output reg        ebreak,
 
   output reg [31:0] o_pc,
   output reg [ 4:0] o_rs1,
@@ -475,6 +476,7 @@ wire [11:0] csr_imm;
 wire        auipc, lui, load, jal, jalr, ecall, mret;
 wire        UType, JType, BType, IType, SType, RType, IcsrType;
 wire        I_imm;
+wire        is_ebreak;
 wire        idu_ifu_handshake, idu_exu_handshake;
 
 assign idu_ifu_handshake = ifu_idu_valid  && idu_ifu_ready;
@@ -500,7 +502,7 @@ assign BType    = (opcode == 7'b1100011);
 assign SType    = (opcode == 7'b0100011);
 assign RType    = (opcode == 7'b0110011);
 assign IcsrType = (opcode == 7'b1110011);
-assign ebreak   = (i_inst == 32'b00000000000100000000000001110011);
+assign is_ebreak= (i_inst == 32'b00000000000100000000000001110011);
 assign ecall    = (i_inst == 32'b00000000000000000000000001110011);
 assign mret     = (i_inst == 32'b00110000001000000000000001110011);
 
@@ -548,7 +550,7 @@ assign lsu_cnt = SType ? ((fun3 == 3'b000) ? 4'b0001 : (fun3 == 3'b001) ? 4'b001
 wire [2:0] csr_cnt;
 assign csr_cnt = IcsrType ? ((fun3 == 3'b001) ? 3'b001 :
                              (fun3 == 3'b010) ? 3'b010 :
-                             ebreak           ? 3'b011 :
+                             is_ebreak        ? 3'b011 :
                              ecall            ? 3'b100 :
                              mret             ? 3'b101 : 3'b000) : 3'b000;
 
@@ -594,10 +596,12 @@ always_ff @(posedge clock) begin
     o_auipc       <= 1'b0;
     o_jal         <= 1'b0;
     o_jalr        <= 1'b0;
+    ebreak        <= 1'b0;
   end else begin
     if (i_br_taken) begin
       // 跳转：丢弃 IDU 中已译码但未送出的指令
       idu_exu_valid <= 1'b0;
+      ebreak        <= 1'b0;
     end else if (idu_ifu_handshake) begin
       idu_exu_valid <= 1'b1;
       o_pc          <= i_pc;
@@ -616,8 +620,10 @@ always_ff @(posedge clock) begin
       o_auipc       <= auipc;
       o_jal         <= jal;
       o_jalr        <= jalr;
+      ebreak        <= is_ebreak;
     end else if (idu_exu_handshake) begin
       idu_exu_valid <= 1'b0;
+      ebreak        <= 1'b0;
     end
   end
 end
@@ -642,6 +648,7 @@ module ysyx_24080018_EXU(
   input wire [31:0] i_pc,
   output reg [31:0] o_pc,
   input wire [31:0] i_imm,
+  input wire [11:0] i_csr_imm,
   input wire [31:0] i_rdata1,
   input wire [31:0] i_rdata2,
   input wire [ 4:0] i_waddr,
@@ -689,12 +696,63 @@ wire bypass_valid = i_bypass_valid && (i_bypass_waddr != 5'b0);
 wire [31:0] src1_data = (bypass_valid && (i_bypass_waddr == i_rs1)) ? i_bypass_wdata : i_rdata1;
 wire [31:0] src2_data = (bypass_valid && (i_bypass_waddr == i_rs2)) ? i_bypass_wdata : i_rdata2;
 
+localparam [11:0] CSR_MSTATUS = 12'h300;
+localparam [11:0] CSR_MTVEC   = 12'h305;
+localparam [11:0] CSR_MEPC    = 12'h341;
+localparam [11:0] CSR_MCAUSE  = 12'h342;
+localparam [11:0] CSR_MCYCLE  = 12'hb00;
+localparam [11:0] CSR_MCYCLEH = 12'hb80;
+localparam [11:0] CSR_MVENDORID = 12'hf11;
+localparam [11:0] CSR_MARCHID   = 12'hf12;
+localparam [31:0] CSR_MVENDORID_VALUE = 32'h79737978;
+localparam [31:0] CSR_MARCHID_VALUE   = 32'h016f6e92;
+
+reg [31:0] csr_mtvec;
+reg [31:0] csr_mepc;
+reg [31:0] csr_mstatus;
+reg [31:0] csr_mcause;
+reg [63:0] csr_mcycle;
+
+reg [31:0] csr_direct_rdata;
+always_comb begin
+  unique case (i_csr_imm)
+    CSR_MSTATUS   : csr_direct_rdata = csr_mstatus;
+    CSR_MTVEC     : csr_direct_rdata = csr_mtvec;
+    CSR_MEPC      : csr_direct_rdata = csr_mepc;
+    CSR_MCAUSE    : csr_direct_rdata = csr_mcause;
+    CSR_MCYCLE    : csr_direct_rdata = csr_mcycle[31:0];
+    CSR_MCYCLEH   : csr_direct_rdata = csr_mcycle[63:32];
+    CSR_MVENDORID : csr_direct_rdata = CSR_MVENDORID_VALUE;
+    CSR_MARCHID   : csr_direct_rdata = CSR_MARCHID_VALUE;
+    default       : csr_direct_rdata = 32'b0;
+  endcase
+end
+
+wire csr_is_csrrw = (i_csr_cnt == 3'b001);
+wire csr_is_csrrs = (i_csr_cnt == 3'b010);
+wire csr_is_ecall = (i_csr_cnt == 3'b100);
+wire csr_is_mret  = (i_csr_cnt == 3'b101);
+wire csr_write_en = csr_is_csrrw || (csr_is_csrrs && (i_rs1 != 5'b0));
+wire [31:0] csr_rdata = csr_is_mret  ? csr_mepc  :
+                        csr_is_ecall ? csr_mtvec :
+                                       csr_direct_rdata;
+wire [31:0] csr_write_data = csr_is_csrrs ? (csr_direct_rdata | src1_data) :
+                                            src1_data;
+
+reg [31:0] csr_mtvec_next;
+reg [31:0] csr_mepc_next;
+reg [31:0] csr_mstatus_next;
+reg [31:0] csr_mcause_next;
+reg [63:0] csr_mcycle_next;
+
 wire [31:0] alu_a,alu_b;
 assign alu_a = (i_lui                    ) ? 32'b0      :
                (i_jalr | i_auipc | i_jal ) ? i_pc       :
+               (csr_is_csrrw | csr_is_csrrs) ? csr_rdata :
                src1_data;
 
 assign alu_b = (  i_jal | i_jalr         ) ? 32'd4      :
+               (  csr_is_csrrw | csr_is_csrrs) ? 32'b0  :
                (  UType | JType | IType  ) ? i_imm      :
                (  RType | SType | BType  ) ? src2_data:
                32'b0;
@@ -709,11 +767,14 @@ assign _br_taken = ( i_pc_cnt == 4'b0001 ) ? ($signed(src1_data) == $signed(src2
                    ( i_pc_cnt == 4'b0111 ) ? 1'b1 : // jal
                    ( i_pc_cnt == 4'b1000 ) ? 1'b1 : // jalr
                    1'b0;
-wire exu_redirect_taken = (i_pc_cnt == 4'b1000) || ((i_pc_cnt >= 4'b0001) && (i_pc_cnt <= 4'b0110));
+wire exu_redirect_taken = (((i_pc_cnt >= 4'b0001) && (i_pc_cnt <= 4'b0110)) || (i_pc_cnt == 4'b1000)) && _br_taken;
+wire csr_redirect_taken = csr_is_mret || csr_is_ecall;
 
 wire [31:0] br_target_calc;
 assign br_target_calc = (i_pc_cnt == 4'b1000) ? ((src1_data + i_imm) & ~32'h1) : // jalr
-                                                  (i_pc + i_imm);                  // jal / branch
+                        (i_pc_cnt == 4'b1001) ? csr_mepc                        : // mret
+                        (i_pc_cnt == 4'b1010) ? csr_mtvec                       : // ecall
+                                                (i_pc + i_imm);                   // jal / branch
 
 wire  [63:0]  shift_temp ;
 assign shift_temp = ({{32{alu_a[31]}}, alu_a} >>  alu_b[4:0]);
@@ -740,6 +801,56 @@ assign _alu_result = ( i_alu_cnt === 4'b0001 ) ? (         alu_a  +        alu_b
                      // sign>> (sra/srai)
                      ( i_alu_cnt === 4'b1010 ) ? ( shift_temp[31:0] ):
                      32'b0;
+
+always_comb begin
+  csr_mtvec_next   = csr_mtvec;
+  csr_mepc_next    = csr_mepc;
+  csr_mstatus_next = csr_mstatus;
+  csr_mcause_next  = csr_mcause;
+  csr_mcycle_next  = csr_mcycle + 64'd1;
+
+  if (idu_exu_handshake) begin
+    if (csr_write_en) begin
+      unique case (i_csr_imm)
+        CSR_MSTATUS : csr_mstatus_next = csr_write_data;
+        CSR_MTVEC   : csr_mtvec_next   = csr_write_data;
+        CSR_MEPC    : csr_mepc_next    = csr_write_data;
+        CSR_MCAUSE  : csr_mcause_next  = csr_write_data;
+        CSR_MCYCLE  : csr_mcycle_next  = {csr_mcycle[63:32], csr_write_data};
+        CSR_MCYCLEH : csr_mcycle_next  = {csr_write_data, csr_mcycle[31:0]};
+        default     : ;
+      endcase
+    end
+
+    if (csr_is_ecall) begin
+      csr_mepc_next           = i_pc;
+      csr_mcause_next         = 32'd11;
+      csr_mstatus_next[7]     = csr_mstatus[3];
+      csr_mstatus_next[3]     = 1'b0;
+      csr_mstatus_next[12:11] = 2'b11;
+    end else if (csr_is_mret) begin
+      csr_mstatus_next[3]     = csr_mstatus[7];
+      csr_mstatus_next[7]     = 1'b1;
+      csr_mstatus_next[12:11] = 2'b00;
+    end
+  end
+end
+
+always_ff @(posedge clock) begin
+  if (reset) begin
+    csr_mtvec   <= 32'b0;
+    csr_mepc    <= 32'b0;
+    csr_mstatus <= 32'h00001800;
+    csr_mcause  <= 32'b0;
+    csr_mcycle  <= 64'b0;
+  end else begin
+    csr_mtvec   <= csr_mtvec_next;
+    csr_mepc    <= csr_mepc_next;
+    csr_mstatus <= csr_mstatus_next;
+    csr_mcause  <= csr_mcause_next;
+    csr_mcycle  <= csr_mcycle_next;
+  end
+end
 
 // EXU 握手状态机：exu_idu_ready 表示 EXU 可以接收新指令
 always_ff @(posedge clock) begin
@@ -791,7 +902,7 @@ always_ff @(posedge clock) begin
       o_lsu_raddr   <= src1_data + i_imm;
       o_raddr1      <= i_rs1;
       o_raddr2      <= i_rs2;
-      o_br_taken    <= exu_redirect_taken && _br_taken;
+      o_br_taken    <= exu_redirect_taken || csr_redirect_taken;
     end else if (exu_lsu_handshake) begin
       exu_lsu_valid <= 1'b0;
     end
