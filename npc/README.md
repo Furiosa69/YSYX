@@ -6,6 +6,7 @@
 make config // 设置 debug 时参数
 make run    // 编译
 make wave   // 打开波形文件(gtkwave)
+make regress // 生成并运行 regression_mem_branch 回归测试
 ```
 
 ### LOG

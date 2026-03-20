@@ -32,7 +32,7 @@ wire idu_exu_valid,exu_idu_ready;
 wire exu_lsu_valid,lsu_exu_ready;
 wire lsu_wbu_valid,wbu_lsu_ready;
 
-wire ebreak;
+wire idu_ebreak, exu_ebreak, lsu_ebreak;
 
 wire [31:0] ifu_pc,idu_pc,exu_pc,lsu_pc;
 wire [31:0] ifu_inst;
@@ -47,6 +47,8 @@ wire [ 3:0] idu_lsu_cnt;
 wire [ 2:0] idu_csr_cnt;
 wire [ 5:0] idu_ins_cnt;
 wire        idu_wbu_cnt;
+wire        idu_jal_redirect;
+wire [31:0] idu_jal_target;
 
 wire [31:0] wbu_rdata1, wbu_rdata2;
 wire [ 4:0] exu_waddr;
@@ -61,6 +63,9 @@ wire [ 4:0] exu_raddr1, exu_raddr2;
 wire [ 4:0] lsu_raddr1, lsu_raddr2, lsu_waddr;
 wire [31:0] lsu_wdata;
 wire        lsu_wbu_cnt;
+wire        lsu_bypass_valid;
+wire        lsu_load_pending;
+wire [ 4:0] lsu_load_waddr;
 
 wire        io_ifu_arready;
 wire        io_ifu_arvalid;
@@ -97,6 +102,8 @@ ysyx_24080018_IFU ifu(
 
   .i_br_taken     (exu_br_taken ),
   .i_br_target    (exu_br_target),
+  .i_jal_redirect (idu_jal_redirect),
+  .i_jal_target   (idu_jal_target),
 
   .o_ifu_araddr   (io_ifu_araddr ),
   .o_ifu_arvalid  (io_ifu_arvalid),
@@ -120,7 +127,7 @@ ysyx_24080018_IDU idu(
   .o_auipc       (idu_auipc    ),
   .o_jal         (idu_jal      ),
   .o_jalr        (idu_jalr     ),
-  .ebreak        (ebreak       ),
+  .ebreak        (idu_ebreak   ),
   .i_pc          (ifu_pc       ),
   .o_pc          (idu_pc       ),
   .o_rs1         (idu_rs1      ),
@@ -133,7 +140,9 @@ ysyx_24080018_IDU idu(
   .o_lsu_cnt     (idu_lsu_cnt  ),
   .o_csr_cnt     (idu_csr_cnt  ),
   .o_ins_cnt     (idu_ins_cnt  ),
-  .o_wbu_cnt     (idu_wbu_cnt  )
+  .o_wbu_cnt     (idu_wbu_cnt  ),
+  .o_jal_redirect(idu_jal_redirect),
+  .o_jal_target  (idu_jal_target)
 );
 
 ysyx_24080018_EXU exu(
@@ -147,6 +156,7 @@ ysyx_24080018_EXU exu(
   .i_lui         (idu_lui      ),
   .i_jal         (idu_jal      ),
   .i_jalr        (idu_jalr     ),
+  .i_ebreak      (idu_ebreak   ),
   .i_pc          (idu_pc       ),
   .o_pc          (exu_pc       ),
   .i_imm         (idu_imm      ),
@@ -159,6 +169,12 @@ ysyx_24080018_EXU exu(
   .o_alu_result  (exu_wdata    ),
   .o_br_taken    (exu_br_taken ),
   .o_br_target   (exu_br_target),
+  .o_ebreak      (exu_ebreak   ),
+  .i_load_pending(lsu_load_pending),
+  .i_load_waddr  (lsu_load_waddr),
+  .i_bypass_valid(lsu_bypass_valid),
+  .i_bypass_waddr(lsu_waddr     ),
+  .i_bypass_wdata(lsu_wdata     ),
   .i_ins_cnt     (idu_ins_cnt  ),
   .i_pc_cnt      (idu_pc_cnt   ),
   .i_alu_cnt     (idu_alu_cnt  ),
@@ -187,6 +203,7 @@ ysyx_24080018_LSU lsu(
   .i_waddr       (exu_waddr     ),
   .i_wdata       (exu_wdata     ),
   .i_pc          (exu_pc        ),
+  .i_ebreak      (exu_ebreak    ),
   .i_wbu_cnt     (exu_wbu_cnt   ),
   .i_lsu_cnt     (exu_lsu_cnt   ),
   .i_lsu_wdata   (exu_lsu_wdata ),
@@ -197,7 +214,11 @@ ysyx_24080018_LSU lsu(
   .o_waddr       (lsu_waddr     ),
   .o_wdata       (lsu_wdata     ),
   .o_pc          (lsu_pc        ),
+  .o_ebreak      (lsu_ebreak    ),
   .o_wbu_cnt     (lsu_wbu_cnt   ),
+  .o_bypass_valid(lsu_bypass_valid),
+  .o_load_pending(lsu_load_pending),
+  .o_load_waddr  (lsu_load_waddr),
   .o_lsu_awaddr  (io_lsu_awaddr ),
   .o_lsu_awvalid (io_lsu_awvalid),
   .i_lsu_awready (io_lsu_awready),
@@ -224,12 +245,12 @@ ysyx_24080018_WBU wbu(
   .wbu_lsu_ready (wbu_lsu_ready),
   .rdata1        (wbu_rdata1   ),
   .rdata2        (wbu_rdata2   ),
-  .i_raddr1      (lsu_raddr1   ),
-  .i_raddr2      (lsu_raddr2   ),
+  .i_raddr1      (idu_rs1      ),
+  .i_raddr2      (idu_rs2      ),
   .i_waddr       (lsu_waddr    ),
   .i_wdata       (lsu_wdata    ),
   .i_pc          (lsu_pc       ),
-  .ebreak        (ebreak       ),
+  .ebreak        (lsu_ebreak   ),
   .i_wbu_cnt     (lsu_wbu_cnt  )
 );
 
@@ -293,6 +314,8 @@ module ysyx_24080018_IFU(
   // 来自 EXU 的跳转信号
   input wire         i_br_taken,
   input wire [31:0]  i_br_target,
+  input wire         i_jal_redirect,
+  input wire [31:0]  i_jal_target,
 
   output reg [31:0]  o_ifu_araddr,
   output reg         o_ifu_arvalid,
@@ -309,19 +332,23 @@ module ysyx_24080018_IFU(
 reg [31:0] pc;
 // 跳转发生后，已取回但尚未送给 IDU 的指令需要丢弃
 reg        flush_pending;
+reg        req_pending;
+reg [31:0] req_pc;
 
 wire ifu_idu_handshake = ifu_idu_valid && idu_ifu_ready;
 wire ar_handshake = o_ifu_arvalid && i_ifu_arready;
 wire r_handshake  = i_ifu_rvalid  && o_ifu_rready;
 // 本拍正在接收数据（ifu_idu_valid 下拍才更新，需要组合信号提前屏蔽重复取指）
 wire inst_arriving = r_handshake;
+wire redirect_taken = i_br_taken | i_jal_redirect;
+wire [31:0] redirect_target = i_br_taken ? i_br_target : i_jal_target;
 
 // PC 更新：跳转时加载目标地址，否则握手后 +4
 always_ff @(posedge clock) begin
   if (reset) begin
     pc <= 32'h80000000;
-  end else if (i_br_taken) begin
-    pc <= i_br_target;
+  end else if (redirect_taken) begin
+    pc <= redirect_target;
   end else if (ifu_idu_handshake) begin
     pc <= pc + 32'd4;
   end
@@ -332,16 +359,16 @@ always_ff @(posedge clock) begin
   if (reset) begin
     o_ifu_arvalid <= 1'b0;
     o_ifu_araddr  <= 32'h80000000;
-  end else if (i_br_taken) begin
+  end else if (redirect_taken) begin
     // 跳转：取消当前未完成的请求，发起跳转目标地址请求
     o_ifu_arvalid <= 1'b1;
-    o_ifu_araddr  <= i_br_target;
+    o_ifu_araddr  <= redirect_target;
   end else if (ar_handshake) begin
     o_ifu_arvalid <= 1'b0;
-  end else if (~o_ifu_arvalid && ifu_idu_handshake) begin
+  end else if (~o_ifu_arvalid && ~req_pending && ifu_idu_handshake) begin
     o_ifu_arvalid <= 1'b1;
     o_ifu_araddr  <= pc + 4;
-  end else if (~o_ifu_arvalid && ~ifu_idu_valid && ~inst_arriving) begin
+  end else if (~o_ifu_arvalid && ~req_pending && ~ifu_idu_valid && ~inst_arriving) begin
     o_ifu_arvalid <= 1'b1;
     o_ifu_araddr  <= pc;
   end
@@ -351,11 +378,26 @@ end
 always_ff @(posedge clock) begin
   if (reset) begin
     flush_pending <= 1'b0;
-  end else if (i_br_taken) begin
-    // 跳转时只要 AR 已发出（无论是否同拍握手），响应都是旧地址的，需要丢弃
-    flush_pending <= o_ifu_arvalid;
+  end else if (redirect_taken) begin
+    // 跳转时若存在已发出但未返回的旧请求，也需要丢弃其响应
+    flush_pending <= o_ifu_arvalid | req_pending;
   end else if (r_handshake) begin
     flush_pending <= 1'b0;
+  end
+end
+
+always_ff @(posedge clock) begin
+  if (reset) begin
+    req_pending <= 1'b0;
+    req_pc      <= 32'h80000000;
+  end else begin
+    if (ar_handshake) begin
+      req_pending <= 1'b1;
+      req_pc      <= o_ifu_araddr;
+    end
+    if (r_handshake) begin
+      req_pending <= 1'b0;
+    end
   end
 end
 
@@ -368,7 +410,7 @@ always_ff @(posedge clock) begin
     o_ifu_rready  <= 1'b1;
   end else begin
     o_ifu_rready <= 1'b1;
-    if (i_br_taken) begin
+    if (redirect_taken) begin
       // 跳转：丢弃已锁存的指令
       ifu_idu_valid <= 1'b0;
     end else if (r_handshake && (i_ifu_rresp == 2'b00)) begin
@@ -377,7 +419,7 @@ always_ff @(posedge clock) begin
         ifu_idu_valid <= 1'b0;
       end else begin
         o_inst        <= i_ifu_rdata;
-        o_pc          <= pc;
+        o_pc          <= req_pc;
         ifu_idu_valid <= 1'b1;
       end
     end else if (ifu_idu_handshake) begin
@@ -419,7 +461,9 @@ module ysyx_24080018_IDU (
   output reg [ 3:0] o_lsu_cnt,
   output reg [ 2:0] o_csr_cnt,
   output reg [ 5:0] o_ins_cnt,
-  output reg        o_wbu_cnt
+  output reg        o_wbu_cnt,
+  output wire       o_jal_redirect,
+  output wire [31:0] o_jal_target
 );
 
 wire [ 6:0] opcode;
@@ -513,6 +557,8 @@ assign ins_cnt = {UType, JType, BType, IType, SType, RType};
 
 wire wbu_cnt;
 assign wbu_cnt = UType | JType | IType | RType | (csr_cnt == 3'b001) | (csr_cnt == 3'b010);
+assign o_jal_redirect = idu_ifu_handshake && jal;
+assign o_jal_target   = i_pc + imm;
 
 // 握手：只要 IDU 没有待发送给 EXU 的数据，就可以接收 IFU 的数据
 always_ff @(posedge clock) begin
@@ -591,6 +637,7 @@ module ysyx_24080018_EXU(
   input wire        i_lui,
   input wire        i_jal,
   input wire        i_jalr,
+  input wire        i_ebreak,
 
   input wire [31:0] i_pc,
   output reg [31:0] o_pc,
@@ -603,7 +650,13 @@ module ysyx_24080018_EXU(
   output reg [ 4:0] o_waddr,
   output reg [31:0] o_alu_result,
   output reg        o_br_taken,
-  output wire[31:0] o_br_target,
+  output reg [31:0] o_br_target,
+  output reg        o_ebreak,
+  input wire        i_load_pending,
+  input wire [ 4:0] i_load_waddr,
+  input wire        i_bypass_valid,
+  input wire [ 4:0] i_bypass_waddr,
+  input wire [31:0] i_bypass_wdata,
 
   input wire [ 5:0] i_ins_cnt,
   input wire [ 3:0] i_pc_cnt,
@@ -629,30 +682,38 @@ assign exu_lsu_handshake = exu_lsu_valid && lsu_exu_ready;
 wire UType, JType, BType, IType, SType, RType;
 assign {UType,JType,BType,IType,SType,RType} = i_ins_cnt;
 
+wire load_use_hazard = i_load_pending &&
+                      (((i_load_waddr == i_rs1) && (i_rs1 != 5'b0)) ||
+                       ((i_load_waddr == i_rs2) && (i_rs2 != 5'b0)));
+wire bypass_valid = i_bypass_valid && (i_bypass_waddr != 5'b0);
+wire [31:0] src1_data = (bypass_valid && (i_bypass_waddr == i_rs1)) ? i_bypass_wdata : i_rdata1;
+wire [31:0] src2_data = (bypass_valid && (i_bypass_waddr == i_rs2)) ? i_bypass_wdata : i_rdata2;
 
 wire [31:0] alu_a,alu_b;
 assign alu_a = (i_lui                    ) ? 32'b0      :
                (i_jalr | i_auipc | i_jal ) ? i_pc       :
-               i_rdata1;
+               src1_data;
 
 assign alu_b = (  i_jal | i_jalr         ) ? 32'd4      :
                (  UType | JType | IType  ) ? i_imm      :
-               (  RType | SType | BType  ) ? i_rdata2:
+               (  RType | SType | BType  ) ? src2_data:
                32'b0;
 
 wire _br_taken;
-assign _br_taken = ( i_pc_cnt == 4'b0001 ) ? ($signed(i_rdata1) == $signed(i_rdata2)) :
-                   ( i_pc_cnt == 4'b0010 ) ? ($signed(i_rdata1) != $signed(i_rdata2)) :
-                   ( i_pc_cnt == 4'b0011 ) ? ($signed(i_rdata1) <  $signed(i_rdata2)) :
-                   ( i_pc_cnt == 4'b0100 ) ? ($signed(i_rdata1) >= $signed(i_rdata2)) :
-                   ( i_pc_cnt == 4'b0101 ) ? (        i_rdata1  <          i_rdata2 ) :
-                   ( i_pc_cnt == 4'b0110 ) ? (        i_rdata1  >=         i_rdata2 ) :
+assign _br_taken = ( i_pc_cnt == 4'b0001 ) ? ($signed(src1_data) == $signed(src2_data)) :
+                   ( i_pc_cnt == 4'b0010 ) ? ($signed(src1_data) != $signed(src2_data)) :
+                   ( i_pc_cnt == 4'b0011 ) ? ($signed(src1_data) <  $signed(src2_data)) :
+                   ( i_pc_cnt == 4'b0100 ) ? ($signed(src1_data) >= $signed(src2_data)) :
+                   ( i_pc_cnt == 4'b0101 ) ? (        src1_data  <          src2_data ) :
+                   ( i_pc_cnt == 4'b0110 ) ? (        src1_data  >=         src2_data ) :
                    ( i_pc_cnt == 4'b0111 ) ? 1'b1 : // jal
                    ( i_pc_cnt == 4'b1000 ) ? 1'b1 : // jalr
                    1'b0;
+wire exu_redirect_taken = (i_pc_cnt == 4'b1000) || ((i_pc_cnt >= 4'b0001) && (i_pc_cnt <= 4'b0110));
 
-assign o_br_target = (i_pc_cnt == 4'b1000) ? ((i_rdata1 + i_imm) & ~32'h1) : // jalr
-                        (i_pc + i_imm);                                            // jal / branch
+wire [31:0] br_target_calc;
+assign br_target_calc = (i_pc_cnt == 4'b1000) ? ((src1_data + i_imm) & ~32'h1) : // jalr
+                                                  (i_pc + i_imm);                  // jal / branch
 
 wire  [63:0]  shift_temp ;
 assign shift_temp = ({{32{alu_a[31]}}, alu_a} >>  alu_b[4:0]);
@@ -680,22 +741,15 @@ assign _alu_result = ( i_alu_cnt === 4'b0001 ) ? (         alu_a  +        alu_b
                      ( i_alu_cnt === 4'b1010 ) ? ( shift_temp[31:0] ):
                      32'b0;
 
-reg _br_taken_r;
-always_ff @(posedge clock) begin
-  if (reset) _br_taken_r <= 1'b0;
-  else if (idu_exu_handshake) _br_taken_r <= _br_taken;
-  else if (exu_lsu_handshake) _br_taken_r <= 1'b0;
-end
-
 // EXU 握手状态机：exu_idu_ready 表示 EXU 可以接收新指令
 always_ff @(posedge clock) begin
   if (reset) begin
     exu_idu_ready <= 1'b1;
   end else begin
-    if (exu_lsu_handshake)
-      exu_idu_ready <= 1'b1;
-    else if (idu_exu_handshake)
+    if (idu_exu_handshake)
       exu_idu_ready <= 1'b0;
+    else if (~exu_lsu_valid && lsu_exu_ready && ~load_use_hazard)
+      exu_idu_ready <= 1'b1;
   end
 end
 
@@ -707,6 +761,8 @@ always_ff @(posedge clock) begin
     o_waddr       <= 5'b0;
     o_alu_result  <= 32'b0;
     o_br_taken    <= 1'b0;
+    o_br_target   <= 32'b0;
+    o_ebreak      <= 1'b0;
     o_wbu_cnt     <= 1'b0;
     o_csr_cnt     <= 3'b0;
     o_lsu_cnt     <= 4'b0;
@@ -724,19 +780,20 @@ always_ff @(posedge clock) begin
       o_waddr       <= i_waddr;
       o_alu_result  <= _alu_result;
       o_wbu_cnt     <= i_wbu_cnt;
+      o_br_target   <= br_target_calc;
+      o_ebreak      <= i_ebreak;
       o_csr_cnt     <= i_csr_cnt;
       o_lsu_cnt     <= i_lsu_cnt;
       // store: waddr = rs1 + imm, wdata = rs2
-      o_lsu_waddr   <= i_rdata1 + i_imm;
-      o_lsu_wdata   <= i_rdata2;
+      o_lsu_waddr   <= src1_data + i_imm;
+      o_lsu_wdata   <= src2_data;
       // load: raddr = rs1 + imm
-      o_lsu_raddr   <= i_rdata1 + i_imm;
+      o_lsu_raddr   <= src1_data + i_imm;
       o_raddr1      <= i_rs1;
       o_raddr2      <= i_rs2;
-      o_br_taken    <= i_jal ? _br_taken : 1'b0;
+      o_br_taken    <= exu_redirect_taken && _br_taken;
     end else if (exu_lsu_handshake) begin
       exu_lsu_valid <= 1'b0;
-      o_br_taken    <= i_jalr ? _br_taken_r: 1'b0;
     end
   end
 end
@@ -757,6 +814,7 @@ module ysyx_24080018_LSU(
   input wire [ 4:0] i_waddr,
   input wire [31:0] i_wdata,
   input wire [31:0] i_pc,
+  input wire        i_ebreak,
   input wire        i_wbu_cnt,
   input wire [ 3:0] i_lsu_cnt,
   input wire [31:0] i_lsu_wdata,
@@ -768,7 +826,11 @@ module ysyx_24080018_LSU(
   output reg [ 4:0] o_waddr,
   output reg [31:0] o_wdata,
   output reg [31:0] o_pc,
+  output reg        o_ebreak,
   output reg        o_wbu_cnt,
+  output wire       o_bypass_valid,
+  output wire       o_load_pending,
+  output wire [ 4:0] o_load_waddr,
 
   output reg [31:0] o_lsu_awaddr ,
   output reg        o_lsu_awvalid,
@@ -802,17 +864,31 @@ assign exu_lsu_handshake = exu_lsu_valid && lsu_exu_ready;
 wire is_store = (i_lsu_cnt >= 4'b0001) && (i_lsu_cnt <= 4'b0011);
 wire is_load  = (i_lsu_cnt >= 4'b0100) && (i_lsu_cnt <= 4'b1000);
 wire is_mem   = is_store | is_load;
+assign o_bypass_valid = ~lsu_exu_ready && o_wbu_cnt && ~(latched_lsu_cnt >= 4'b0100 && latched_lsu_cnt <= 4'b1000);
+assign o_load_pending = ~lsu_exu_ready && (latched_lsu_cnt >= 4'b0100) && (latched_lsu_cnt <= 4'b1000);
+assign o_load_waddr   = o_waddr;
 
 // 锁存来自 EXU 的操作信息（等待 AXI 完成期间保持稳定）
 reg [31:0] latched_addr;
 reg [ 3:0] latched_lsu_cnt;
-reg [31:0] latched_wdata;
 
 // 读回的数据
 reg [31:0] temp;
 
 // 用于 byte/half 选择的地址来自锁存地址
 wire [31:0] i_lsu_addr = latched_addr;
+
+wire [31:0] store_wdata;
+assign store_wdata = (i_lsu_cnt == 4'b0001) ?
+                     ((i_lsu_waddr[1:0] == 2'd0) ? {24'b0, i_lsu_wdata[ 7:0]} :
+                      (i_lsu_waddr[1:0] == 2'd1) ? {16'b0, i_lsu_wdata[ 7:0],  8'b0} :
+                      (i_lsu_waddr[1:0] == 2'd2) ? { 8'b0, i_lsu_wdata[ 7:0], 16'b0} :
+                                                    {        i_lsu_wdata[ 7:0], 24'b0}) :
+                     (i_lsu_cnt == 4'b0010) ?
+                     (i_lsu_waddr[1] ? {i_lsu_wdata[15:0], 16'b0} :
+                                       {16'b0, i_lsu_wdata[15:0]}) :
+                     (i_lsu_cnt == 4'b0011) ? i_lsu_wdata :
+                     32'b0;
 
 wire [3:0] wmask_half, wmask_byte;
 assign wmask_half  = (latched_addr[1]   == 1'b0) ? 4'h3 : 4'hc;
@@ -892,13 +968,13 @@ always_ff @(posedge clock) begin
     latched_lsu_cnt <= 4'b0;
     aw_done         <= 1'b0;
     w_done          <= 1'b0;
-    latched_wdata   <= 32'b0;
     temp            <= 32'b0;
     o_raddr1        <= 5'b0;
     o_raddr2        <= 5'b0;
     o_waddr         <= 5'b0;
     o_wdata         <= 32'b0;
     o_pc            <= 32'h80000000;
+    o_ebreak        <= 1'b0;
     o_wbu_cnt       <= 1'b0;
   end else begin
     unique case (state)
@@ -907,23 +983,23 @@ always_ff @(posedge clock) begin
           lsu_exu_ready   <= 1'b0;
           latched_addr    <= is_load ? i_lsu_raddr : i_lsu_waddr;
           latched_lsu_cnt <= i_lsu_cnt;
-          latched_wdata   <= i_lsu_wdata;
           o_raddr1        <= i_raddr1;
           o_raddr2        <= i_raddr2;
           o_waddr         <= i_waddr;
           o_wdata         <= i_wdata;
           o_pc            <= i_pc;
+          o_ebreak        <= i_ebreak;
           o_wbu_cnt       <= i_wbu_cnt;
           if (is_load) begin
-            o_lsu_araddr  <= i_lsu_raddr;
+            o_lsu_araddr  <= {i_lsu_raddr[31:2], 2'b00};
             o_lsu_arvalid <= 1'b1;
             o_lsu_rready  <= 1'b1;
             state         <= LSU_LOAD_AR;
           end else if (is_store) begin
-            o_lsu_awaddr  <= i_lsu_waddr;
+            o_lsu_awaddr  <= {i_lsu_waddr[31:2], 2'b00};
             o_lsu_awvalid <= 1'b1;
             o_lsu_wvalid  <= 1'b1;
-            o_lsu_wdata   <= i_lsu_wdata;
+            o_lsu_wdata   <= store_wdata;
             aw_done       <= 1'b0;
             w_done        <= 1'b0;
             state         <= LSU_STORE_AW;

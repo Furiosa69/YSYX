@@ -15,6 +15,7 @@ void init_difftest(char *ref_so_file,long img_size,int port);
 void difftest_step(uint32_t pc, uint32_t npc);
 
 void difftest_skip_ref();
+void difftest_enable();
+void difftest_disable();
 
 #endif
-

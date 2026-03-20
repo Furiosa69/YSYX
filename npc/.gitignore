@@ -2,5 +2,7 @@
 !vsrc/
 !csrc/
 !bin/
+!bin/*.S
+!bin/*.sh
 !Makefile
 !README.md

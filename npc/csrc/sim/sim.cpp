@@ -29,6 +29,66 @@ static bool record_wave_near_checkpoint = false;
 static uint64_t wave_record_start_time = 0;
 static const uint64_t WAVE_RECORD_DURATION = 1000; // 记录1000个时间单位
 
+static inline uint32_t read_arch_reg(const CPU_state &state, uint32_t idx) {
+  return idx == 0 ? 0 : state.gpr[idx];
+}
+
+static inline int32_t sign_extend(uint32_t value, int bits) {
+  return (int32_t)(value << (32 - bits)) >> (32 - bits);
+}
+
+static uint32_t decode_next_pc(const CPU_state &pre_state, uint32_t retired_pc, uint32_t inst) {
+  uint32_t opcode = inst & 0x7f;
+  uint32_t funct3 = (inst >> 12) & 0x7;
+  uint32_t rs1 = (inst >> 15) & 0x1f;
+  uint32_t rs2 = (inst >> 20) & 0x1f;
+
+  switch (opcode) {
+    case 0x63: {
+      int32_t imm = sign_extend(
+        ((inst >> 31) << 12) |
+        (((inst >> 7) & 0x1) << 11) |
+        (((inst >> 25) & 0x3f) << 5) |
+        (((inst >> 8) & 0xf) << 1), 13);
+      uint32_t src1 = read_arch_reg(pre_state, rs1);
+      uint32_t src2 = read_arch_reg(pre_state, rs2);
+      bool taken = false;
+
+      switch (funct3) {
+        case 0x0: taken = ((int32_t)src1 == (int32_t)src2); break;
+        case 0x1: taken = ((int32_t)src1 != (int32_t)src2); break;
+        case 0x4: taken = ((int32_t)src1 <  (int32_t)src2); break;
+        case 0x5: taken = ((int32_t)src1 >= (int32_t)src2); break;
+        case 0x6: taken = (src1 < src2); break;
+        case 0x7: taken = (src1 >= src2); break;
+      }
+
+      return taken ? retired_pc + imm : retired_pc + 4;
+    }
+    case 0x6f: {
+      int32_t imm = sign_extend(
+        ((inst >> 31) << 20) |
+        (((inst >> 12) & 0xff) << 12) |
+        (((inst >> 20) & 0x1) << 11) |
+        (((inst >> 21) & 0x3ff) << 1), 21);
+      return retired_pc + imm;
+    }
+    case 0x67: {
+      int32_t imm = sign_extend(inst >> 20, 12);
+      return (read_arch_reg(pre_state, rs1) + imm) & ~1u;
+    }
+    default:
+      return retired_pc + 4;
+  }
+}
+
+static void sync_cpu_gpr_from_dut() {
+  cpu.gpr[0] = 0;
+  for (int i = 1; i < 32; ++i) {
+    cpu.gpr[i] = GPR[i];
+  }
+}
+
 void step_and_dump_wave(){
   top->eval();
   contextp->timeInc(1);
@@ -101,10 +161,7 @@ void rst_begin(){
 		clock_tick();
 
   	cpu.pc = PC;
-
-		for(int i = 0; i<32 ; ++i){
-			cpu.gpr[i] = GPR[i];
-		}
+    sync_cpu_gpr_from_dut();
 //		cpu.csr[0] = MCAUSE;
 //		cpu.csr[1] = MTVEC ;
 //		cpu.csr[2] = MEPC  ;
@@ -164,6 +221,8 @@ static void axi_tick() {
 }
 
 static void exec_once(Decode *s, uint32_t pc) {
+    CPU_state pre_state = cpu;
+    uint32_t retired_pc = pc;
     bool done = false;
     do {
         axi_tick();
@@ -174,24 +233,25 @@ static void exec_once(Decode *s, uint32_t pc) {
 //            (int)ARVALID, (int)ARREADY, (int)RVALID, (int)RREADY,
 //            (int)WBU_VALID, (int)WBU_READY);
         if (WBU_VALID && WBU_READY) {
+            retired_pc = DNPC;
+            axi_tick();
+            clock_tick(); // 额外推进一拍，让 WBU 在下个上升沿完成写回
+            clock_tick();
             done = true;
         }
     } while (!done);
 
-  s->pc = pc;
-  s->snpc = pc + 4;
-  s->isa.inst.val = INST;
-  s->dnpc = PC;
+  s->pc = retired_pc;
+  s->snpc = s->pc + 4;
+  s->isa.inst.val = pmem_read(s->pc, 4);
+  s->dnpc = decode_next_pc(pre_state, s->pc, s->isa.inst.val);
 
 	IFONE(CONFIG_RINGBUFF,
-		add_to_ringbuffer(&ringbuf, pc, s->isa.inst.val);
+		add_to_ringbuffer(&ringbuf, s->pc, s->isa.inst.val);
 	)
 
   cpu.pc = s->dnpc;
-
-	for(int i = 0; i<32 ; ++i){
-		cpu.gpr[i] = GPR[i];
-	}
+  sync_cpu_gpr_from_dut();
 //		cpu.csr[0] = MCAUSE;
 //		cpu.csr[1] = MTVEC ;
 //		cpu.csr[2] = MEPC  ;
@@ -202,11 +262,11 @@ static void exec_once(Decode *s, uint32_t pc) {
 	)
 	IFONE(CONFIG_DIFFTEST,
     if(WBU_READY && WBU_VALID){
-		  difftest_step(PC,DNPC);
+		  difftest_step(s->pc, s->dnpc);
     }
 	)
 	IFONE(CONFIG_FTRACE,
-		print_all_function_names(PC,DNPC,INST);
+		print_all_function_names(s->pc, s->dnpc, s->isa.inst.val);
 	)
 	IFONE(CONFIG_ETRACE,
 		if(CSR_cnt != 0){
@@ -315,4 +375,3 @@ int is_exit_status_bad() {
 
   return !good;
 }
-

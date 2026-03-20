@@ -17,8 +17,6 @@ void init_wp_pool();
 void wp_watch(char *expr,uint32_t res);
 void wp_remove(int no);
 void wp_iterate();
-extern void difftest_enable();
-extern void difftest_disable();
 
 static char *log_file = NULL;
 char *diff_so_file = NULL;
@@ -148,10 +146,9 @@ static struct {
 #define NR_CMD ARRLEN(cmd_table)
 
 static int cmd_detach(char *args){
-	char *arg = strtok(NULL, " ");
-  if (!arg) {
-        printf("Usage: detach\n");
-        return 0;
+  if (args != NULL && *args != '\0') {
+    printf("Usage: detach\n");
+    return 0;
   }
   difftest_disable();
   printf("DIFFTEST Disable\n");
@@ -159,14 +156,12 @@ static int cmd_detach(char *args){
 }
 
 static int cmd_attach(char *args){
-	char *arg = strtok(NULL, " ");
-  if (!arg) {
-        printf("Usage: attach\n");
-        return 0;
+  if (args != NULL && *args != '\0') {
+    printf("Usage: attach\n");
+    return 0;
   }
   difftest_enable();
   printf("DIFFTEST Enable\n");
-//  ref_difftest_regcpy(&cpu, DIFFTEST_TO_REF);
   return 0;
 }
 
